@@ -10,4 +10,4 @@ React 19 + TypeScript 前端承担界面渲染、Konva `1920×1080` 协议级画
 | [状态切片与服务 (`stores/` & `services/` & `hooks/`)](state.md) | Zustand 六大 Store、Tauri IPC 桥接、未保存守卫、快捷键与指针平移状态机 |
 | [设计系统与界面视图 (`styles/` & `components/` & `features/`)](ui.md) | 明暗双主题、公共复用组件（`toast`、`ContextMenu`、`UnsavedChangesDialog`）与五大视图 |
 
-相关全局文档：[全局架构](../doc/architecture.md) · [Rust 模块总览](../../src-tauri/doc/README.md)
+相关全局文档：[全局架构](../../doc/architecture.md) · [Rust 模块总览](../../src-tauri/doc/README.md)
