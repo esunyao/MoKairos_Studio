@@ -1,0 +1,113 @@
+/* ==========================================================================
+   MoKairos Studio — 设计系统双主题 Token 与裁判系统协议只读常量
+   严格区分两套视觉空间：
+   1. App Shell 语义色板（暗色默认 Dark Studio + 浅色适配 Light Precision + 玻璃变量）
+   2. RoboMaster 裁判系统协议 9 色只读常量（仅限 1920x1080 画布图元渲染）
+   ========================================================================== */
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* --- 字体栈 --- */
+  --mk-font-sans: 'Inter', 'PingFang SC', 'Microsoft YaHei UI', system-ui, -apple-system, sans-serif;
+  --mk-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+
+  /* --- 布局尺寸 --- */
+  --mk-topbar-height: 44px;
+  --mk-toolrail-width: 44px;
+  --mk-sidebar-width: 240px;
+  --mk-inspector-width: 276px;
+  --mk-radius-sm: 6px;
+  --mk-radius-md: 10px;
+  --mk-radius-lg: 14px;
+
+  /* --- App Shell 暗色默认（Dark Studio） --- */
+  --mk-bg-canvas: #0d1117;
+  --mk-bg-panel: #141923;
+  --mk-bg-surface: #1b2230;
+  --mk-bg-surface-hover: #232c3d;
+  --mk-bg-code: #0f141c;
+  --mk-border-subtle: #263042;
+  --mk-border-strong: #364359;
+  --mk-border-focus: #00d4ff;
+
+  --mk-text-primary: #f1f5f9;
+  --mk-text-secondary: #94a3b8;
+  --mk-text-muted: #64748b;
+
+  --mk-accent-primary: #00d4ff;
+  --mk-accent-primary-hover: #22d3ee;
+  --mk-accent-primary-tint: rgba(0, 212, 255, 0.14);
+  --mk-accent-on-primary: #06131a;
+
+  --mk-status-ok: #22c55e;
+  --mk-status-ok-tint: rgba(34, 197, 94, 0.15);
+  --mk-status-warn: #f59e0b;
+  --mk-status-warn-tint: rgba(245, 158, 11, 0.15);
+  --mk-status-error: #ef4444;
+  --mk-status-error-tint: rgba(239, 68, 68, 0.15);
+
+  --mk-dot-grid: rgba(148, 163, 184, 0.16);
+
+  /* --- 外壳玻璃质感变量（严禁用于画布内部图元） --- */
+  --mk-glass-bg: rgba(18, 24, 34, 0.72);
+  --mk-glass-elevated-bg: rgba(20, 27, 39, 0.84);
+  --mk-glass-border: rgba(148, 163, 184, 0.16);
+  --mk-glass-highlight: rgba(255, 255, 255, 0.06);
+  --mk-glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+
+  /* --- RoboMaster 裁判系统协议 9 色只读常量（严禁任意 HEX 混入画布） --- */
+  --rm-proto-0-main-red: #ff3b30;
+  --rm-proto-0-main-blue: #00a8ff;
+  --rm-proto-1-yellow: #ffd60a;
+  --rm-proto-2-green: #00e676;
+  --rm-proto-3-orange: #ff8c00;
+  --rm-proto-4-purple: #c040ff;
+  --rm-proto-5-pink: #ff69b4;
+  --rm-proto-6-cyan: #00e5ff;
+  --rm-proto-7-black: #000000;
+  --rm-proto-8-white: #ffffff;
+
+  /* --- 官方遮挡禁区叠加层（仅设计辅助，绝不导出） --- */
+  --mk-safezone-danger-fill: rgba(239, 68, 68, 0.18);
+  --mk-safezone-danger-stroke: rgba(239, 68, 68, 0.85);
+}
+
+/* --- App Shell 浅色适配（Light Precision Engineering Theme） --- */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --mk-bg-canvas: #f4f6f9;
+  --mk-bg-panel: #ffffff;
+  --mk-bg-surface: #f8fafc;
+  --mk-bg-surface-hover: #eef2f7;
+  --mk-bg-code: #f1f5f9;
+  --mk-border-subtle: #e2e8f0;
+  --mk-border-strong: #cbd5e1;
+  --mk-border-focus: #2563eb;
+
+  --mk-text-primary: #0f172a;
+  --mk-text-secondary: #475569;
+  --mk-text-muted: #94a3b8;
+
+  --mk-accent-primary: #2563eb;
+  --mk-accent-primary-hover: #1d4ed8;
+  --mk-accent-primary-tint: rgba(37, 99, 235, 0.1);
+  --mk-accent-on-primary: #ffffff;
+
+  --mk-status-ok: #16a34a;
+  --mk-status-ok-tint: rgba(22, 163, 74, 0.12);
+  --mk-status-warn: #d97706;
+  --mk-status-warn-tint: rgba(217, 119, 6, 0.12);
+  --mk-status-error: #dc2626;
+  --mk-status-error-tint: rgba(220, 38, 38, 0.12);
+
+  --mk-dot-grid: rgba(15, 23, 42, 0.14);
+
+  --mk-glass-bg: rgba(255, 255, 255, 0.76);
+  --mk-glass-elevated-bg: rgba(255, 255, 255, 0.88);
+  --mk-glass-border: rgba(15, 23, 42, 0.1);
+  --mk-glass-highlight: rgba(255, 255, 255, 0.7);
+  --mk-glass-shadow: 0 12px 32px rgba(15, 23, 42, 0.1);
+}

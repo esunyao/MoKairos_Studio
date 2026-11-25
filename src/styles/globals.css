@@ -1,0 +1,93 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* ==========================================================================
+   全局基础样式、玻璃质感实用类与等宽数值规范
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--mk-font-sans);
+  background-color: var(--mk-bg-canvas);
+  color: var(--mk-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+}
+
+input,
+textarea,
+code,
+pre {
+  user-select: text;
+}
+
+/* 所有坐标、角度、协议 ID 与字节预算强制启用等宽对齐数字 */
+.mk-tabular {
+  font-family: var(--mk-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 外壳层磨砂玻璃质感（仅限顶栏、悬浮胶囊、弹窗与抽屉，严禁用于画布内部） */
+.mk-glass {
+  background: var(--mk-glass-bg);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-color: var(--mk-glass-border);
+  box-shadow: inset 0 1px 0 var(--mk-glass-highlight);
+}
+
+.mk-glass-elevated {
+  background: var(--mk-glass-elevated-bg);
+  backdrop-filter: blur(20px) saturate(175%);
+  -webkit-backdrop-filter: blur(20px) saturate(175%);
+  border: 1px solid var(--mk-glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--mk-glass-highlight),
+    var(--mk-glass-shadow);
+}
+
+/* 细腻滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--mk-border-strong);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--mk-text-muted);
+}
+
+/* 主题切换平滑过渡（不作用于 Konva canvas） */
+.mk-theme-transition {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-theme-transition {
+    transition: none;
+  }
+}
