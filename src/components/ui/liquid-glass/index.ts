@@ -3,6 +3,12 @@ export {
   type LiquidGlassSurfaceProps,
 } from "./LiquidGlassSurface";
 export {
+  AdaptiveGlassSlot,
+  GlassContrastContext,
+  useGlassContrastContext,
+  type GlassContrastContextValue,
+} from "./GlassContrastContext";
+export {
   DEFAULT_LIQUID_GLASS_CONFIG,
   type LiquidGlassConfig,
   type LiquidGlassMode,

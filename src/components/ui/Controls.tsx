@@ -4,7 +4,7 @@ import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Check, ChevronDown } from "lucide-react";
-import { LiquidGlassSurface } from "./liquid-glass";
+import { AdaptiveGlassSlot, LiquidGlassSurface } from "./liquid-glass";
 import { cn } from "./cn";
 
 /**
@@ -98,12 +98,17 @@ export function SimpleSelect({
                 <SelectPrimitive.Item
                   key={opt.value}
                   value={opt.value}
-                  className="relative flex cursor-pointer items-center justify-between rounded-[var(--mk-radius-sm)] px-2.5 py-1.5 outline-none data-[highlighted]:bg-[var(--mk-accent-primary-tint)] data-[highlighted]:text-[var(--mk-accent-primary)]"
+                  className="relative cursor-pointer rounded-[var(--mk-radius-sm)] px-2.5 py-1.5 outline-none data-[highlighted]:bg-[var(--mk-accent-primary-tint)] data-[highlighted]:text-[var(--mk-accent-primary)]"
                 >
-                  <SelectPrimitive.ItemText>{opt.label}</SelectPrimitive.ItemText>
-                  <SelectPrimitive.ItemIndicator>
-                    <Check className="h-3.5 w-3.5" />
-                  </SelectPrimitive.ItemIndicator>
+                  <AdaptiveGlassSlot
+                    as="span"
+                    className="flex w-full items-center justify-between"
+                  >
+                    <SelectPrimitive.ItemText>{opt.label}</SelectPrimitive.ItemText>
+                    <SelectPrimitive.ItemIndicator>
+                      <Check className="h-3.5 w-3.5" />
+                    </SelectPrimitive.ItemIndicator>
+                  </AdaptiveGlassSlot>
                 </SelectPrimitive.Item>
               ))}
             </SelectPrimitive.Viewport>

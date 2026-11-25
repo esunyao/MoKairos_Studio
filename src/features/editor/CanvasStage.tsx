@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Group,
   Image as KonvaImage,
@@ -33,7 +40,10 @@ import {
   type ContextMenuEntry,
   type ContextMenuState,
 } from "@/components/ui/ContextMenu";
-import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
+import {
+  AdaptiveGlassSlot,
+  LiquidGlassSurface,
+} from "@/components/ui/liquid-glass";
 import {
   GRAPHIC_KIND_METAS,
   RM_CANVAS_HEIGHT,
@@ -75,6 +85,18 @@ function useHtmlImage(src: string | null): HTMLImageElement | null {
   }, [src]);
   return img;
 }
+
+/**
+ * 隔离指针 RM 坐标读数渲染，避免鼠标移动导致主画布与底部液态玻璃胶囊整棵重渲染
+ */
+const CursorCoordReadout = memo(function CursorCoordReadout() {
+  const cursorRm = useCanvasStore((s) => s.cursorRm);
+  return (
+    <span className="mk-tabular inline-block min-w-[104px] shrink-0 px-1.5 text-right text-[var(--mk-text-secondary)]">
+      RM ({cursorRm ? `${cursorRm.x}, ${cursorRm.y}` : "—, —"})
+    </span>
+  );
+});
 
 export function CanvasStage({
   frame,
@@ -129,8 +151,52 @@ export function CanvasStage({
   const scale = useCanvasStore((s) => s.scale);
   const offsetX = useCanvasStore((s) => s.offsetX);
   const offsetY = useCanvasStore((s) => s.offsetY);
-  const cursorRm = useCanvasStore((s) => s.cursorRm);
   const setCursorRm = useCanvasStore((s) => s.setCursorRm);
+
+  const lastCursorRmRef = useRef<{ x: number; y: number } | null>(null);
+  const pendingCursorRmRef = useRef<{ x: number; y: number } | null>(null);
+  const cursorRafRef = useRef<number | null>(null);
+
+  const scheduleCursorRm = useCallback(
+    (coord: { x: number; y: number } | null) => {
+      if (coord === null) {
+        if (cursorRafRef.current !== null) {
+          cancelAnimationFrame(cursorRafRef.current);
+          cursorRafRef.current = null;
+        }
+        pendingCursorRmRef.current = null;
+        if (lastCursorRmRef.current !== null) {
+          lastCursorRmRef.current = null;
+          setCursorRm(null);
+        }
+        return;
+      }
+
+      const prev = lastCursorRmRef.current;
+      if (prev && prev.x === coord.x && prev.y === coord.y) {
+        return;
+      }
+      pendingCursorRmRef.current = coord;
+      if (cursorRafRef.current === null) {
+        cursorRafRef.current = requestAnimationFrame(() => {
+          cursorRafRef.current = null;
+          const next = pendingCursorRmRef.current;
+          if (!next) return;
+          lastCursorRmRef.current = next;
+          setCursorRm(next);
+        });
+      }
+    },
+    [setCursorRm],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (cursorRafRef.current !== null) {
+        cancelAnimationFrame(cursorRafRef.current);
+      }
+    };
+  }, []);
 
   const toggleGrid = useCanvasStore((s) => s.toggleGrid);
   const toggleBackground = useCanvasStore((s) => s.toggleBackground);
@@ -301,7 +367,7 @@ export function CanvasStage({
   const handleStageMouseMove = () => {
     const pt = getArtboardPointer();
     if (pt) {
-      setCursorRm({ x: pt.x, y: pt.y });
+      scheduleCursorRm({ x: pt.x, y: pt.y });
     }
     if (!editable || isPanning) return;
 
@@ -654,7 +720,7 @@ export function CanvasStage({
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
-        onMouseLeave={() => setCursorRm(null)}
+        onMouseLeave={() => scheduleCursorRm(null)}
       >
         {/* 外围无限点阵层：单 Shape 按可见边界动态绘制，稳定 60fps */}
         <Layer listening={false}>
@@ -783,50 +849,58 @@ export function CanvasStage({
           className="pointer-events-auto"
           contentClassName="flex items-center gap-0.5 overflow-x-auto whitespace-nowrap px-2.5 py-1 text-[11px]"
         >
-          <button
-            type="button"
-            onClick={handleFit}
-            className="shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-secondary)] hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
-          >
-            适应视口
-          </button>
-          <button
-            type="button"
-            onClick={handleZoom100}
-            className="mk-tabular shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-primary)] hover:bg-[var(--mk-bg-surface-hover)] cursor-pointer"
-            title="点击重置为 100%"
-          >
-            {Math.round(scale * 100)}%
-          </button>
+          <AdaptiveGlassSlot as="span" className="inline-flex shrink-0 items-center">
+            <button
+              type="button"
+              onClick={handleFit}
+              className="shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-secondary)] hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
+            >
+              适应视口
+            </button>
+          </AdaptiveGlassSlot>
+          <AdaptiveGlassSlot as="span" className="inline-flex shrink-0 items-center">
+            <button
+              type="button"
+              onClick={handleZoom100}
+              className="mk-tabular shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-primary)] hover:bg-[var(--mk-bg-surface-hover)] cursor-pointer"
+              title="点击重置为 100%"
+            >
+              {Math.round(scale * 100)}%
+            </button>
+          </AdaptiveGlassSlot>
           <span className="h-3.5 w-px shrink-0 bg-[var(--mk-border-subtle)]" />
-          <button
-            type="button"
-            onClick={toggleGrid}
-            className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-              showGrid
-                ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
-                : "text-[var(--mk-text-muted)]"
-            }`}
-            title="切换点阵网格显示 (G)"
-          >
-            点阵
-          </button>
-          <button
-            type="button"
-            onClick={toggleBackground}
-            className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-              showBackground
-                ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
-                : "text-[var(--mk-text-muted)]"
-            }`}
-            title="切换官方客户端底图显示 (B)"
-          >
-            底图
-          </button>
+          <AdaptiveGlassSlot as="span" className="inline-flex shrink-0 items-center">
+            <button
+              type="button"
+              onClick={toggleGrid}
+              className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
+                showGrid
+                  ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
+                  : "text-[var(--mk-text-muted)]"
+              }`}
+              title="切换点阵网格显示 (G)"
+            >
+              点阵
+            </button>
+          </AdaptiveGlassSlot>
+          <AdaptiveGlassSlot as="span" className="inline-flex shrink-0 items-center">
+            <button
+              type="button"
+              onClick={toggleBackground}
+              className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
+                showBackground
+                  ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
+                  : "text-[var(--mk-text-muted)]"
+              }`}
+              title="切换官方客户端底图显示 (B)"
+            >
+              底图
+            </button>
+          </AdaptiveGlassSlot>
           <span className="h-3.5 w-px shrink-0 bg-[var(--mk-border-subtle)]" />
-          <span className="mk-tabular shrink-0 px-1.5 text-[var(--mk-text-secondary)]">
-            RM ({cursorRm ? `${cursorRm.x}, ${cursorRm.y}` : "—, —"})
-          </span>
+          <AdaptiveGlassSlot as="span" className="inline-flex shrink-0 items-center">
+            <CursorCoordReadout />
+          </AdaptiveGlassSlot>
         </LiquidGlassSurface>
       </div>
 

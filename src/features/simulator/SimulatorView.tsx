@@ -14,7 +14,10 @@ import { SimpleSelect, Slider } from "@/components/ui/Controls";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Badge, Input } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
-import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
+import {
+  AdaptiveGlassSlot,
+  LiquidGlassSurface,
+} from "@/components/ui/liquid-glass";
 import {
   ROBOT_ROLES_2027,
   deriveRobotAndClientIds,
@@ -141,13 +144,17 @@ export function SimulatorView() {
                   running ? "bg-[var(--mk-status-ok)]" : "bg-[var(--mk-text-muted)]"
                 }`}
               />
-              <span className="font-medium text-[var(--mk-text-primary)]">
-                只读模拟视口
-              </span>
-              <span className="mk-tabular text-[var(--mk-text-secondary)]">
-                ID: {ids.robotId} →{" "}
-                {ids.clientId ? `0x${ids.clientId.toString(16).toUpperCase()}` : "无选手端"}
-              </span>
+              <AdaptiveGlassSlot as="span" className="inline-flex items-center">
+                <span className="font-medium text-[var(--mk-text-primary)]">
+                  只读模拟视口
+                </span>
+              </AdaptiveGlassSlot>
+              <AdaptiveGlassSlot as="span" className="inline-flex items-center">
+                <span className="mk-tabular text-[var(--mk-text-secondary)]">
+                  ID: {ids.robotId} →{" "}
+                  {ids.clientId ? `0x${ids.clientId.toString(16).toUpperCase()}` : "无选手端"}
+                </span>
+              </AdaptiveGlassSlot>
             </LiquidGlassSurface>
           </div>
         </div>

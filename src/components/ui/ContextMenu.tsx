@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronRight } from "lucide-react";
-import { LiquidGlassSurface } from "./liquid-glass";
+import { AdaptiveGlassSlot, LiquidGlassSurface } from "./liquid-glass";
 import { cn } from "./cn";
 
 /**
@@ -47,10 +47,9 @@ function MenuPanel({
       {items.map((entry) => {
         if (entry.type === "separator") {
           return (
-            <div
-              key={entry.id}
-              className="my-1 h-px bg-[var(--mk-border-subtle)]"
-            />
+            <AdaptiveGlassSlot key={entry.id}>
+              <div className="my-1 h-px bg-[var(--mk-border-subtle)]" />
+            </AdaptiveGlassSlot>
           );
         }
 
@@ -58,53 +57,60 @@ function MenuPanel({
         const subOpen = hoveredSubId === entry.id && hasChildren && !entry.disabled;
 
         return (
-          <div
+          <AdaptiveGlassSlot
             key={entry.id}
             className="relative"
-            onMouseEnter={() => setHoveredSubId(hasChildren ? entry.id : null)}
           >
-            <button
-              type="button"
-              disabled={entry.disabled}
-              onClick={() => {
-                if (entry.disabled || hasChildren) return;
-                entry.onSelect?.();
-                onClose();
-              }}
-              className={cn(
-                "flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left transition-colors cursor-pointer disabled:pointer-events-none disabled:opacity-40",
-                entry.danger
-                  ? "text-[var(--mk-status-error)] hover:bg-[var(--mk-status-error-tint)]"
-                  : "text-[var(--mk-text-primary)] hover:bg-[var(--mk-accent-primary-tint)] hover:text-[var(--mk-accent-primary)]",
-              )}
+            <div
+              onMouseEnter={() => setHoveredSubId(hasChildren ? entry.id : null)}
             >
-              <span className="flex items-center gap-2">
-                {entry.icon && (
-                  <span className="flex h-3.5 w-3.5 items-center justify-center opacity-85">
-                    {entry.icon}
-                  </span>
+              <button
+                type="button"
+                disabled={entry.disabled}
+                onClick={() => {
+                  if (entry.disabled || hasChildren) return;
+                  entry.onSelect?.();
+                  onClose();
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-4 px-3 py-1.5 text-left transition-colors cursor-pointer disabled:pointer-events-none disabled:opacity-55",
+                  entry.danger
+                    ? "text-[var(--mk-status-error)] hover:bg-[var(--mk-status-error-tint)]"
+                    : "text-[var(--mk-text-primary)] hover:bg-[var(--mk-accent-primary-tint)] hover:text-[var(--mk-accent-primary)]",
                 )}
-                <span>{entry.label}</span>
-              </span>
-              {hasChildren ? (
-                <ChevronRight className="h-3.5 w-3.5 text-[var(--mk-text-muted)]" />
-              ) : (
-                entry.shortcut && (
-                  <span className="mk-tabular text-[10px] text-[var(--mk-text-muted)]">
-                    {entry.shortcut}
-                  </span>
-                )
-              )}
-            </button>
+              >
+                <AdaptiveGlassSlot as="span" className="flex items-center gap-2">
+                  {entry.icon && (
+                    <span className="flex h-3.5 w-3.5 items-center justify-center opacity-85">
+                      {entry.icon}
+                    </span>
+                  )}
+                  <span>{entry.label}</span>
+                </AdaptiveGlassSlot>
+                {hasChildren ? (
+                  <AdaptiveGlassSlot as="span" className="inline-flex items-center">
+                    <ChevronRight className="h-3.5 w-3.5 text-[var(--mk-text-muted)]" />
+                  </AdaptiveGlassSlot>
+                ) : (
+                  entry.shortcut && (
+                    <AdaptiveGlassSlot as="span" className="inline-flex items-center">
+                      <span className="mk-tabular text-[10px] text-[var(--mk-text-muted)]">
+                        {entry.shortcut}
+                      </span>
+                    </AdaptiveGlassSlot>
+                  )
+                )}
+              </button>
 
-            {subOpen && entry.children && (
-              <div className="absolute top-0 left-full ml-1">
-                <LiquidGlassSurface cornerRadius={12} elastic={false} lightweight>
-                  <MenuPanel items={entry.children} onClose={onClose} />
-                </LiquidGlassSurface>
-              </div>
-            )}
-          </div>
+              {subOpen && entry.children && (
+                <div className="absolute top-0 left-full ml-1">
+                  <LiquidGlassSurface cornerRadius={12} elastic={false} lightweight>
+                    <MenuPanel items={entry.children} onClose={onClose} />
+                  </LiquidGlassSurface>
+                </div>
+              )}
+            </div>
+          </AdaptiveGlassSlot>
         );
       })}
     </div>
@@ -181,7 +187,12 @@ export function ContextMenu({
             style={{ left: pos.left, top: pos.top }}
             className="fixed"
           >
-            <LiquidGlassSurface cornerRadius={12} elastic={false} lightweight>
+            <LiquidGlassSurface
+              cornerRadius={12}
+              elastic={false}
+              lightweight
+              sampleKey={`${pos.left},${pos.top}`}
+            >
               <MenuPanel items={state.items} onClose={onClose} />
             </LiquidGlassSurface>
           </motion.div>

@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import {
   resolveAdaptiveInk,
-  sampleElementBackdropLuminance,
+  sampleElementBackdropGrid,
+  type BackdropGridSample,
   type GlassInk,
 } from "@/services/backdropLuminance";
 import { useAppStore, type ThemeMode } from "@/stores/useAppStore";
@@ -9,11 +16,29 @@ import { useCanvasStore } from "@/stores/useCanvasStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
 
 /**
- * 液态玻璃背景相对亮度响应式采样 Hook
- * 自动跟随容器尺寸、明暗主题、画布平移缩放、底图切换与滚动事件更新文字极性
+ * 液态玻璃背景 16×16 空间亮度网格响应式采样 Hook
+ * - 避免将高频画布平移/缩放订阅进 React 渲染树，改用命令式 Store 订阅 + 防抖（含 maxWait 上限）
+ * - 支持 sampleKey（如 Portal 重定位坐标）在定位与入场动画结束后立即补采稳态网格
  */
 
-const SAMPLE_THROTTLE_MS = 100;
+const PAN_DEBOUNCE_MS = 220;
+const PAN_MAX_WAIT_MS = 500;
+const DOC_DEBOUNCE_MS = 120;
+
+function hasGridChanged(
+  prev: Float32Array | undefined,
+  next: Float32Array,
+): boolean {
+  if (!prev || prev.length !== next.length) {
+    return true;
+  }
+  for (let i = 0; i < next.length; i++) {
+    if (Math.abs(prev[i] - next[i]) >= 0.02) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export function useAdaptiveGlassContrast(
   ref: RefObject<HTMLElement | null>,
@@ -21,48 +46,59 @@ export function useAdaptiveGlassContrast(
     enabled: boolean;
     overLight: boolean;
     theme: ThemeMode;
+    trackCanvas?: boolean;
+    sampleKey?: string | number;
   },
 ): {
   ink: GlassInk;
   isMixedContrast: boolean;
   luminance: number;
+  sample: BackdropGridSample | null;
+  sampleVersion: number;
 } {
-  const { enabled, overLight, theme } = options;
+  const { enabled, overLight, theme, trackCanvas = true, sampleKey } = options;
   const fallbackInk: GlassInk = theme === "light" ? "dark" : "light";
 
   const [state, setState] = useState<{
     ink: GlassInk;
     isMixedContrast: boolean;
     luminance: number;
+    sample: BackdropGridSample | null;
+    sampleVersion: number;
   }>(() => ({
     ink: fallbackInk,
     isMixedContrast: false,
     luminance: theme === "light" ? 0.9 : 0.08,
+    sample: null,
+    sampleVersion: 0,
   }));
 
   const prevInkRef = useRef<GlassInk>(fallbackInk);
-  const lastSampleAtRef = useRef(0);
-  const trailingTimerRef = useRef<number | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const prevSampleRef = useRef<BackdropGridSample | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const maxWaitStartRef = useRef<number | null>(null);
 
   const performSample = useCallback(() => {
     const el = ref.current;
     if (!enabled || !el) {
       const nextInk: GlassInk = theme === "light" ? "dark" : "light";
       prevInkRef.current = nextInk;
+      prevSampleRef.current = null;
       setState((prev) =>
-        prev.ink === nextInk && !prev.isMixedContrast
+        prev.ink === nextInk && !prev.isMixedContrast && prev.sample === null
           ? prev
           : {
               ink: nextInk,
               isMixedContrast: false,
               luminance: theme === "light" ? 0.9 : 0.08,
+              sample: null,
+              sampleVersion: prev.sampleVersion + 1,
             },
       );
       return;
     }
 
-    const result = sampleElementBackdropLuminance(el);
+    const result = sampleElementBackdropGrid(el);
     if (!result.valid) {
       return;
     }
@@ -71,90 +107,125 @@ export function useAdaptiveGlassContrast(
       overLight,
     });
     prevInkRef.current = nextInk;
-    const isMixedContrast = result.variance > 0.065;
+    const isMixedContrast = result.variance > 0.035;
+
+    const prevSample = prevSampleRef.current;
+    const rectMoved =
+      !prevSample ||
+      Math.abs(prevSample.rect.left - result.rect.left) > 2 ||
+      Math.abs(prevSample.rect.top - result.rect.top) > 2 ||
+      Math.abs(prevSample.rect.width - result.rect.width) > 2 ||
+      Math.abs(prevSample.rect.height - result.rect.height) > 2;
+    const gridChanged = hasGridChanged(prevSample?.grid, result.grid);
 
     setState((prev) => {
       if (
         prev.ink === nextInk &&
         prev.isMixedContrast === isMixedContrast &&
-        Math.abs(prev.luminance - result.luminance) < 0.015
+        !rectMoved &&
+        !gridChanged
       ) {
         return prev;
       }
+      prevSampleRef.current = result;
       return {
         ink: nextInk,
         isMixedContrast,
         luminance: result.luminance,
+        sample: result,
+        sampleVersion: prev.sampleVersion + 1,
       };
     });
   }, [enabled, overLight, ref, theme]);
 
-  const scheduleSample = useCallback(() => {
-    if (typeof window === "undefined") return;
-    const now = performance.now();
-    const elapsed = now - lastSampleAtRef.current;
+  const scheduleDebouncedSample = useCallback(
+    (delayMs: number, maxWaitMs?: number) => {
+      if (typeof window === "undefined") return;
+      const now = performance.now();
 
-    if (elapsed >= SAMPLE_THROTTLE_MS) {
-      lastSampleAtRef.current = now;
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
+      if (maxWaitMs !== undefined) {
+        if (maxWaitStartRef.current === null) {
+          maxWaitStartRef.current = now;
+        } else if (now - maxWaitStartRef.current >= maxWaitMs) {
+          if (timerRef.current !== null) {
+            window.clearTimeout(timerRef.current);
+            timerRef.current = null;
+          }
+          maxWaitStartRef.current = now;
+          performSample();
+          return;
+        }
       }
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        performSample();
-      });
-      return;
-    }
 
-    if (trailingTimerRef.current === null) {
-      trailingTimerRef.current = window.setTimeout(() => {
-        trailingTimerRef.current = null;
-        lastSampleAtRef.current = performance.now();
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+      }
+      timerRef.current = window.setTimeout(() => {
+        timerRef.current = null;
+        maxWaitStartRef.current = null;
         performSample();
-      }, SAMPLE_THROTTLE_MS - elapsed);
-    }
-  }, [performSample]);
+      }, delayMs);
+    },
+    [performSample],
+  );
 
-  // 订阅应用、画布视口与活跃帧变化
   const view = useAppStore((s) => s.view);
   const surfaceStyle = useAppStore((s) => s.surfaceStyle);
 
-  const scale = useCanvasStore((s) => s.scale);
-  const offsetX = useCanvasStore((s) => s.offsetX);
-  const offsetY = useCanvasStore((s) => s.offsetY);
-  const showBackground = useCanvasStore((s) => s.showBackground);
-  const showGrid = useCanvasStore((s) => s.showGrid);
-  const previewTeam = useCanvasStore((s) => s.previewTeam);
-
-  const activeFrameId = useDocumentStore((s) => s.doc.activeFrameId);
-  const frames = useDocumentStore((s) => s.doc.frames);
-
   useEffect(() => {
-    scheduleSample();
-    // 主题/视图切换带有 180ms 渐变或 Konva 异步重绘，补采一次稳态样本
+    if (!enabled) {
+      performSample();
+      return;
+    }
+    const raf = requestAnimationFrame(() => performSample());
+    // 主题切换 (180ms) 与弹窗/菜单入场缩放 (~140ms) 完成后补采稳态空间网格
     const settleTimer = window.setTimeout(() => {
       performSample();
-    }, 190);
+    }, 180);
     return () => {
+      cancelAnimationFrame(raf);
       window.clearTimeout(settleTimer);
     };
-  }, [
-    enabled,
-    overLight,
-    theme,
-    view,
-    surfaceStyle,
-    scale,
-    offsetX,
-    offsetY,
-    showBackground,
-    showGrid,
-    previewTeam,
-    activeFrameId,
-    frames,
-    scheduleSample,
-    performSample,
-  ]);
+  }, [enabled, overLight, theme, view, surfaceStyle, sampleKey, performSample]);
+
+  useEffect(() => {
+    if (!enabled || !trackCanvas) return;
+
+    const unsubCanvas = useCanvasStore.subscribe((next, prev) => {
+      const viewportChanged =
+        next.scale !== prev.scale ||
+        next.offsetX !== prev.offsetX ||
+        next.offsetY !== prev.offsetY;
+      if (viewportChanged) {
+        scheduleDebouncedSample(PAN_DEBOUNCE_MS, PAN_MAX_WAIT_MS);
+        return;
+      }
+
+      const contentFlagChanged =
+        next.showBackground !== prev.showBackground ||
+        next.showGrid !== prev.showGrid ||
+        next.previewTeam !== prev.previewTeam ||
+        next.backgroundOpacity !== prev.backgroundOpacity ||
+        next.customBackgroundUrl !== prev.customBackgroundUrl;
+      if (contentFlagChanged) {
+        scheduleDebouncedSample(DOC_DEBOUNCE_MS);
+      }
+    });
+
+    const unsubDoc = useDocumentStore.subscribe((next, prev) => {
+      if (
+        next.doc.activeFrameId !== prev.doc.activeFrameId ||
+        next.doc.frames !== prev.doc.frames
+      ) {
+        scheduleDebouncedSample(DOC_DEBOUNCE_MS);
+      }
+    });
+
+    return () => {
+      unsubCanvas();
+      unsubDoc();
+    };
+  }, [enabled, trackCanvas, scheduleDebouncedSample]);
 
   useEffect(() => {
     const el = ref.current;
@@ -162,11 +233,11 @@ export function useAdaptiveGlassContrast(
 
     const ro =
       typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => scheduleSample())
+        ? new ResizeObserver(() => scheduleDebouncedSample(DOC_DEBOUNCE_MS))
         : null;
     ro?.observe(el);
 
-    const onViewportChange = () => scheduleSample();
+    const onViewportChange = () => scheduleDebouncedSample(180, 400);
     window.addEventListener("resize", onViewportChange);
     window.addEventListener("scroll", onViewportChange, true);
 
@@ -175,15 +246,12 @@ export function useAdaptiveGlassContrast(
       window.removeEventListener("resize", onViewportChange);
       window.removeEventListener("scroll", onViewportChange, true);
     };
-  }, [enabled, ref, scheduleSample]);
+  }, [enabled, ref, scheduleDebouncedSample]);
 
   useEffect(() => {
     return () => {
-      if (trailingTimerRef.current !== null) {
-        window.clearTimeout(trailingTimerRef.current);
-      }
-      if (rafRef.current !== null) {
-        cancelAnimationFrame(rafRef.current);
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
       }
     };
   }, []);
@@ -193,6 +261,8 @@ export function useAdaptiveGlassContrast(
       ink: fallbackInk,
       isMixedContrast: false,
       luminance: theme === "light" ? 0.9 : 0.08,
+      sample: null,
+      sampleVersion: 0,
     };
   }
 

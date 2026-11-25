@@ -103,11 +103,15 @@ pre {
 }
 
 [data-glass-ink='light'][data-glass-mixed='true'] {
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.72),
+    0 0 10px rgba(0, 0, 0, 0.38);
 }
 
 [data-glass-ink='dark'][data-glass-mixed='true'] {
-  text-shadow: 0 1px 6px rgba(255, 255, 255, 0.65);
+  text-shadow:
+    0 1px 4px rgba(255, 255, 255, 0.9),
+    0 0 10px rgba(255, 255, 255, 0.55);
 }
 
 /* 仅在大厅液态模式下激活的柔和环境光晕（增强液态玻璃折射通透感） */

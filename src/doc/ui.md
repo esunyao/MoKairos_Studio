@@ -7,7 +7,7 @@
 
 ## 2. 公共复用组件 (`src/components/`)
 
-- **[ui/liquid-glass/](../components/ui/liquid-glass/index.ts)**：光学级液态玻璃引擎 `LiquidGlassSurface`（MIT 适配自 `liquid-glass-react`），提供 SVG `feDisplacementMap` 边缘折射与 RGB 三通道色散、动态双高光环边、画布浮条磁性弹性，并与背景相对亮度自适应黑白文字及「液态玻璃 / 普通质感」全应用切换无缝联动。
+- **[ui/liquid-glass/](../components/ui/liquid-glass/index.ts)**：光学级液态玻璃引擎 `LiquidGlassSurface`、`AdaptiveGlassSlot` 与 `GlassContrastContext`（MIT 适配自 `liquid-glass-react`），通过 `backdrop-filter: url(#...)` 实现纯背景边缘折射与 RGB 色散（停靠顶栏免 SVG 折射、轻量浮层 2 基元、浮动胶囊 9 基元且过滤域收紧至 `108%`），支持基于父级 `16×16` 空间亮度网格的子行/子按钮逐项独立黑白文字反色与双色边缘高光，零额外 GPU 开销联动「液态玻璃 / 普通质感」全应用切换。
 - **[ui/toast/](../components/ui/toast/index.ts)**：全局命令式通知组件（`toast.success` / `info` / `warn` / `error` + `<Toaster />`），支持悬停暂停、倒计时进度条与队列重排。
 - **[ui/ContextMenu.tsx](../components/ui/ContextMenu.tsx)**：公共玻璃态自定义右键菜单（视口防溢出定位、快捷键标注、二级子菜单），全局屏蔽浏览器默认右键菜单。
 - **[ui/UnsavedChangesDialog.tsx](../components/ui/UnsavedChangesDialog.tsx)**：未保存改动离开确认弹窗。

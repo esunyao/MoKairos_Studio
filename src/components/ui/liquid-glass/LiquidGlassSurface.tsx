@@ -16,12 +16,14 @@ import {
   supportsSvgBackdropRefraction,
   useSafeGlassFilterId,
 } from "./LiquidGlassFilter";
+import { GlassContrastContext } from "./GlassContrastContext";
 
 /**
  * 公共液态玻璃 / 普通质感统一表面容器
  * - 支持全应用一键切换液态玻璃与普通非液态工程质感
  * - 双层 DOM 隔离：光学层独立 overflow-hidden 承载折射与动态高光，内容层绝不裁切二级弹出菜单
- * - 自动绑定 ResizeObserver 与背景相对亮度采样（浅底黑字 / 深底白字）
+ * - 零重渲染指针高光与磁性弹性驱动：200px 激活区外 0 DOM 写入，激活区内直接驱动 ref.style
+ * - 停靠栏 (variant="bar") 跳过宽幅 SVG 折射以消除全屏 GPU 合成负担
  */
 
 export interface LiquidGlassSurfaceProps {
@@ -34,6 +36,7 @@ export interface LiquidGlassSurfaceProps {
   elastic?: boolean;
   lightweight?: boolean;
   displacementScaleOverride?: number;
+  sampleKey?: string | number;
   onMouseEnter?: MouseEventHandler<HTMLDivElement>;
   onMouseLeave?: MouseEventHandler<HTMLDivElement>;
   onMouseDown?: MouseEventHandler<HTMLDivElement>;
@@ -46,7 +49,28 @@ function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
 }
 
-export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceProps>(
+function buildRimGradient(
+  offsetX: number,
+  offsetY: number,
+  isDarkInk: boolean,
+): string {
+  const angle = 135 + offsetX * 1.2;
+  const startStop = Math.max(10, 33 + offsetY * 0.3);
+  const endStop = Math.min(90, 66 + offsetY * 0.4);
+  const alpha1 = (isDarkInk ? 0.3 : 0.22) + Math.abs(offsetX) * 0.008;
+  const alpha2 = (isDarkInk ? 0.68 : 0.56) + Math.abs(offsetX) * 0.012;
+
+  return `linear-gradient(${angle.toFixed(1)}deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, ${alpha1.toFixed(3)}) ${startStop.toFixed(1)}%,
+    rgba(255, 255, 255, ${alpha2.toFixed(3)}) ${endStop.toFixed(1)}%,
+    rgba(255, 255, 255, 0) 100%)`;
+}
+
+export const LiquidGlassSurface = forwardRef<
+  HTMLDivElement,
+  LiquidGlassSurfaceProps
+>(
   (
     {
       children,
@@ -58,6 +82,7 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
       elastic = false,
       lightweight = false,
       displacementScaleOverride,
+      sampleKey,
       onMouseEnter,
       onMouseLeave,
       onMouseDown,
@@ -70,12 +95,14 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
     const theme = useAppStore((s) => s.theme);
 
     const innerRef = useRef<HTMLDivElement | null>(null);
+    const rimRef = useRef<HTMLSpanElement | null>(null);
+    const rectRef = useRef<DOMRect | null>(null);
+    const wasActiveRef = useRef(false);
+
     const filterId = useSafeGlassFilterId();
     const supportsSvg = useMemo(() => supportsSvgBackdropRefraction(), []);
 
     const [size, setSize] = useState({ width: 240, height: 44 });
-    const [mouseOffset, setMouseOffset] = useState({ x: 0, y: 0 });
-    const [elasticTransform, setElasticTransform] = useState<string | undefined>(undefined);
     const [isHovered, setIsHovered] = useState(false);
 
     const isLiquid = surfaceStyle === "liquid";
@@ -89,39 +116,81 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
       }
     };
 
-    const { ink, isMixedContrast } = useAdaptiveGlassContrast(innerRef, {
-      enabled: isLiquid && liquidGlass.adaptiveContrast,
-      overLight: liquidGlass.overLight,
-      theme,
-    });
+    const { ink, isMixedContrast, sample, sampleVersion } =
+      useAdaptiveGlassContrast(innerRef, {
+        enabled: isLiquid && liquidGlass.adaptiveContrast,
+        overLight: liquidGlass.overLight,
+        theme,
+        trackCanvas: variant !== "bar",
+        sampleKey,
+      });
 
-    // 实时追踪容器真实宽高，保证 SVG 位移贴图与 Shader 比例对齐
+    const isDarkInk = ink === "dark";
+    const contrastCtxValue = useMemo(
+      () => ({
+        sample,
+        sampleVersion,
+        enabled: isLiquid && liquidGlass.adaptiveContrast,
+        overLight: liquidGlass.overLight,
+        fallbackInk: (theme === "light" ? "dark" : "light") as "dark" | "light",
+      }),
+      [
+        sample,
+        sampleVersion,
+        isLiquid,
+        liquidGlass.adaptiveContrast,
+        liquidGlass.overLight,
+        theme,
+      ],
+    );
+
+    // 实时追踪容器真实宽高与缓存包围盒（避免在 pointermove 中频繁 getBoundingClientRect）
     useEffect(() => {
       const el = innerRef.current;
-      if (!el || !isLiquid) return;
+      if (!el || !isLiquid) {
+        rectRef.current = null;
+        return;
+      }
 
-      const update = () => {
+      const refreshGeometry = () => {
         const rect = el.getBoundingClientRect();
+        rectRef.current = rect;
         const w = Math.max(1, Math.round(rect.width));
         const h = Math.max(1, Math.round(rect.height));
         setSize((prev) =>
-          prev.width === w && prev.height === h ? prev : { width: w, height: h },
+          Math.abs(prev.width - w) < 2 && Math.abs(prev.height - h) < 2
+            ? prev
+            : { width: w, height: h },
         );
       };
 
-      update();
-      if (typeof ResizeObserver === "undefined") {
-        return;
-      }
-      const observer = new ResizeObserver(update);
-      observer.observe(el);
-      return () => observer.disconnect();
+      refreshGeometry();
+      const ro =
+        typeof ResizeObserver !== "undefined"
+          ? new ResizeObserver(refreshGeometry)
+          : null;
+      ro?.observe(el);
+
+      const refreshRectOnly = () => {
+        if (innerRef.current) {
+          rectRef.current = innerRef.current.getBoundingClientRect();
+        }
+      };
+      window.addEventListener("resize", refreshRectOnly);
+      window.addEventListener("scroll", refreshRectOnly, true);
+
+      return () => {
+        ro?.disconnect();
+        window.removeEventListener("resize", refreshRectOnly);
+        window.removeEventListener("scroll", refreshRectOnly, true);
+      };
     }, [isLiquid]);
 
-    // 高光边框方向随指针移动 & 可选磁性弹性形变
+    // 零 React setState 指针监听：仅直接驱动 rimRef.style.background 与 innerRef.style.transform
     useEffect(() => {
       if (!isLiquid || typeof window === "undefined") {
-        setElasticTransform(undefined);
+        if (innerRef.current) innerRef.current.style.transform = "";
+        wasActiveRef.current = false;
         return;
       }
 
@@ -132,6 +201,11 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
         elastic && liquidGlass.elasticity > 0 && !reducedMotion;
 
       if (!enableElastic && !isHovered) {
+        if (innerRef.current) innerRef.current.style.transform = "";
+        if (rimRef.current) {
+          rimRef.current.style.background = buildRimGradient(0, 0, isDarkInk);
+        }
+        wasActiveRef.current = false;
         return;
       }
 
@@ -142,41 +216,54 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
       const flushPointer = () => {
         rafPending = false;
         const el = innerRef.current;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        if (rect.width < 1 || rect.height < 1) return;
+        const rect = rectRef.current ?? el?.getBoundingClientRect() ?? null;
+        if (!el || !rect || rect.width < 1 || rect.height < 1) return;
+        rectRef.current = rect;
 
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
         const dx = latestX - cx;
         const dy = latestY - cy;
 
-        const nextOffsetX = clamp((dx / rect.width) * 100, -50, 50);
-        const nextOffsetY = clamp((dy / rect.height) * 100, -50, 50);
-        setMouseOffset((prev) =>
-          Math.abs(prev.x - nextOffsetX) < 1 && Math.abs(prev.y - nextOffsetY) < 1
-            ? prev
-            : { x: nextOffsetX, y: nextOffsetY },
-        );
-
-        if (!enableElastic) {
-          setElasticTransform(undefined);
-          return;
-        }
-
         const edgeDistX = Math.max(0, Math.abs(dx) - rect.width / 2);
         const edgeDistY = Math.max(0, Math.abs(dy) - rect.height / 2);
         const edgeDist = Math.hypot(edgeDistX, edgeDistY);
 
-        if (edgeDist > ACTIVATION_ZONE_PX) {
-          setElasticTransform(undefined);
+        if (!isHovered && edgeDist > ACTIVATION_ZONE_PX) {
+          if (wasActiveRef.current) {
+            wasActiveRef.current = false;
+            el.style.transform = "";
+            if (rimRef.current) {
+              rimRef.current.style.background = buildRimGradient(
+                0,
+                0,
+                isDarkInk,
+              );
+            }
+          }
+          return;
+        }
+
+        wasActiveRef.current = true;
+        const nextOffsetX = clamp((dx / rect.width) * 100, -50, 50);
+        const nextOffsetY = clamp((dy / rect.height) * 100, -50, 50);
+
+        if (rimRef.current) {
+          rimRef.current.style.background = buildRimGradient(
+            nextOffsetX,
+            nextOffsetY,
+            isDarkInk,
+          );
+        }
+
+        if (!enableElastic) {
           return;
         }
 
         const fadeIn = 1 - edgeDist / ACTIVATION_ZONE_PX;
         const centerDist = Math.hypot(dx, dy);
         if (centerDist < 0.5) {
-          setElasticTransform(undefined);
+          el.style.transform = "";
           return;
         }
 
@@ -198,9 +285,7 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
         const tx = clamp(dx * eFactor * 0.05 * fadeIn, -8, 8);
         const ty = clamp(dy * eFactor * 0.05 * fadeIn, -8, 8);
 
-        setElasticTransform(
-          `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scaleX(${scaleX.toFixed(3)}) scaleY(${scaleY.toFixed(3)})`,
-        );
+        el.style.transform = `translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0) scaleX(${scaleX.toFixed(3)}) scaleY(${scaleY.toFixed(3)})`;
       };
 
       const onPointerMove = (e: PointerEvent) => {
@@ -216,7 +301,7 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
       return () => {
         window.removeEventListener("pointermove", onPointerMove);
       };
-    }, [isLiquid, elastic, liquidGlass.elasticity, isHovered]);
+    }, [isLiquid, elastic, liquidGlass.elasticity, isHovered, isDarkInk]);
 
     // ----------------------------------------------------------------------
     // 模式 A：普通非液态工程质感
@@ -246,7 +331,7 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
     }
 
     // ----------------------------------------------------------------------
-    // 模式 B：真实光学液态玻璃（参考 liquid-glass-react）
+    // 模式 B：真实光学液态玻璃（参考 liquid-glass-react，精简 GPU 管线版）
     // ----------------------------------------------------------------------
     const baseDisplacement =
       displacementScaleOverride ??
@@ -257,37 +342,30 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
       ? baseDisplacement * 0.5
       : baseDisplacement;
 
+    // 停靠顶栏 (variant="bar") 仅使用硬件加速 backdrop-filter，不挂载宽幅 SVG 折射滤镜
+    const useSvgRefraction =
+      supportsSvg && variant !== "bar" && displacementScale > 0;
+
     const blurPx =
       (liquidGlass.overLight ? 12 : 4) + liquidGlass.blurAmount * 32;
-    // 折射滤镜直接作用于「背景」(backdrop-filter: url(#id))，不再对元素自身绘制内容施加位移，
-    // 否则自身的描边、阴影与文字会被位移并产生彩色重影与漂浮彩边
     const baseBackdrop = `blur(${blurPx.toFixed(1)}px) saturate(${liquidGlass.saturation}%)`;
-    const backdropFilterValue = supportsSvg
+    const backdropFilterValue = useSvgRefraction
       ? `url(#${filterId}) ${baseBackdrop}`
       : baseBackdrop;
-    const angle = 135 + mouseOffset.x * 1.2;
 
     const outerShadow =
       variant === "bar"
         ? "0 4px 20px rgba(0, 0, 0, 0.14)"
         : liquidGlass.overLight
           ? "0 16px 48px rgba(0, 0, 0, 0.42)"
-          : ink === "dark"
+          : isDarkInk
             ? "0 12px 34px rgba(15, 23, 42, 0.14)"
             : "0 14px 40px rgba(0, 0, 0, 0.32)";
 
     const hairlineBorderShadow =
-      ink === "dark" && !liquidGlass.overLight
-        ? "inset 0 0 0 1px rgba(15, 23, 42, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.9)"
-        : "inset 0 0 0 1px rgba(255, 255, 255, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.28)";
+      "inset 0 0 0 1px rgba(255, 255, 255, 0.34), 0 0 0 1px rgba(15, 23, 42, 0.14)";
 
-    const ringMaskStyle: CSSProperties = {
-      padding: "1.5px",
-      WebkitMask:
-        "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
-      WebkitMaskComposite: "xor",
-      maskComposite: "exclude",
-    };
+    const defaultRimBg = buildRimGradient(0, 0, isDarkInk);
 
     return (
       <div
@@ -299,13 +377,15 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
         style={{
           borderRadius: `${cornerRadius}px`,
           boxShadow: outerShadow,
-          transform: elasticTransform,
           transition: elastic
             ? "transform 180ms cubic-bezier(0.22, 1, 0.36, 1), color 160ms ease, box-shadow 180ms ease"
             : "color 160ms ease, box-shadow 180ms ease",
           ...style,
         }}
         onMouseEnter={(e) => {
+          if (innerRef.current) {
+            rectRef.current = innerRef.current.getBoundingClientRect();
+          }
           setIsHovered(true);
           onMouseEnter?.(e);
         }}
@@ -316,13 +396,13 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
         onMouseDown={onMouseDown}
         onMouseUp={onMouseUp}
       >
-        {/* 光学背景层：独立 overflow-hidden 裁切折射滤镜与双高光边缘，绝不裁切内容区菜单 */}
+        {/* 光学背景层：独立 overflow-hidden 裁切折射滤镜与单层高光边缘，绝不裁切内容区菜单 */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 overflow-hidden"
           style={{ borderRadius: `${cornerRadius}px` }}
         >
-          {supportsSvg && size.width > 0 && size.height > 0 && (
+          {useSvgRefraction && size.width > 0 && size.height > 0 && (
             <LiquidGlassFilter
               id={filterId}
               displacementScale={displacementScale}
@@ -330,6 +410,7 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
               width={size.width}
               height={size.height}
               mode={liquidGlass.mode}
+              simplified={lightweight}
             />
           )}
 
@@ -343,15 +424,15 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
             }}
           />
 
-          {/* 不参与折射的表面微着色层 + 细描边（独立于滤镜层，避免彩边与重影） */}
+          {/* 不参与折射的表面微着色层 + 细描边 */}
           <span
             className="absolute inset-0 block"
             style={{
               backgroundColor: liquidGlass.overLight
                 ? "rgba(0, 0, 0, 0.24)"
-                : ink === "dark"
-                  ? "rgba(255, 255, 255, 0.34)"
-                  : "rgba(255, 255, 255, 0.06)",
+                : isDarkInk
+                  ? "rgba(255, 255, 255, 0.26)"
+                  : "rgba(255, 255, 255, 0.08)",
               boxShadow: hairlineBorderShadow,
               borderRadius: `${cornerRadius}px`,
             }}
@@ -365,33 +446,20 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
             />
           )}
 
-          {/* 双层动态镜面高光环边（screen + overlay） */}
+          {/* 单层动态镜面高光环边（降低 GPU mix-blend 叠加重绘） */}
           <span
+            ref={rimRef}
             className="pointer-events-none absolute inset-0 block"
             style={{
-              ...ringMaskStyle,
+              padding: "1.5px",
+              WebkitMask:
+                "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+              WebkitMaskComposite: "xor",
+              maskComposite: "exclude",
               borderRadius: `${cornerRadius}px`,
-              mixBlendMode: "screen",
-              opacity: ink === "dark" ? 0.5 : 0.28,
-              background: `linear-gradient(${angle}deg,
-                rgba(255, 255, 255, 0) 0%,
-                rgba(255, 255, 255, ${0.14 + Math.abs(mouseOffset.x) * 0.008}) ${Math.max(10, 33 + mouseOffset.y * 0.3)}%,
-                rgba(255, 255, 255, ${0.44 + Math.abs(mouseOffset.x) * 0.012}) ${Math.min(90, 66 + mouseOffset.y * 0.4)}%,
-                rgba(255, 255, 255, 0) 100%)`,
-            }}
-          />
-          <span
-            className="pointer-events-none absolute inset-0 block"
-            style={{
-              ...ringMaskStyle,
-              borderRadius: `${cornerRadius}px`,
-              mixBlendMode: "overlay",
-              opacity: ink === "dark" ? 0.55 : 0.42,
-              background: `linear-gradient(${angle}deg,
-                rgba(255, 255, 255, 0) 0%,
-                rgba(255, 255, 255, ${0.32 + Math.abs(mouseOffset.x) * 0.008}) ${Math.max(10, 33 + mouseOffset.y * 0.3)}%,
-                rgba(255, 255, 255, ${0.65 + Math.abs(mouseOffset.x) * 0.012}) ${Math.min(90, 66 + mouseOffset.y * 0.4)}%,
-                rgba(255, 255, 255, 0) 100%)`,
+              mixBlendMode: isDarkInk ? "overlay" : "screen",
+              opacity: isDarkInk ? 0.72 : 0.45,
+              background: defaultRimBg,
             }}
           />
 
@@ -402,7 +470,7 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
               style={{
                 borderRadius: `${cornerRadius}px`,
                 backgroundImage:
-                  "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.26) 0%, rgba(255, 255, 255, 0) 65%)",
+                  "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 65%)",
                 mixBlendMode: "overlay",
               }}
             />
@@ -410,11 +478,16 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
         </div>
 
         {/* 前景内容层：不设 overflow-hidden，确保二级菜单与气泡完整溢出展示 */}
-        <div
-          className={cn("mk-theme-transition relative z-10", contentClassName)}
-        >
-          {children}
-        </div>
+        <GlassContrastContext.Provider value={contrastCtxValue}>
+          <div
+            className={cn(
+              "mk-theme-transition relative z-10",
+              contentClassName,
+            )}
+          >
+            {children}
+          </div>
+        </GlassContrastContext.Provider>
       </div>
     );
   },

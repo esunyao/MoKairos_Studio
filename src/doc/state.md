@@ -15,13 +15,13 @@
 - **[mkuiFileService.ts](../services/mkuiFileService.ts)**：`.mkui` / `.rmui` / `.json` 文件对话框与跨端读写。
 - **[versionService.ts](../services/versionService.ts)**：封装 `version_commit` / `version_list` / `version_load_snapshot` / `version_export_commit`。
 - **[unsavedGuard.ts](../services/unsavedGuard.ts)**：统一拦截**返回工程大厅**、**新建/打开/导入替换当前工程**与**关闭桌面窗口**时的未保存改动，提供「保存并继续 / 不保存直接离开 / 取消」三选确认。
-- **[backdropLuminance.ts](../services/backdropLuminance.ts)**：实时采样玻璃容器背后 Konva `<canvas>` 像素与 DOM / `<img>` 叠色的 WCAG 相对亮度，计算浅底黑字 / 深底白字防抖极性。
+- **[backdropLuminance.ts](../services/backdropLuminance.ts)**：实时采样玻璃容器背后 `16×16` 空间相对亮度网格，纯 CSS 均一背景直算零 GPU readback，存在 `<canvas>`/`<img>` 或跨区域 DOM 叠层时按校准后 WCAG 阈值（`0.24 ~ 0.31`）输出浅黑深白极性并支持子矩形 `O(cells)` 提取。
 - **[projectActions.ts](../services/projectActions.ts)**：跨视图共用的工程新建、打开、保存与导入导出编排。
 - **[recentProjectsService.ts](../services/recentProjectsService.ts)** & **[windowService.ts](../services/windowService.ts)**：最近工程持久化与窗口标题同步。
 
 ## 3. 交互编排 Hook (`src/hooks/`)
 
-- **[useAdaptiveGlassContrast.ts](../hooks/useAdaptiveGlassContrast.ts)**：监听容器尺寸、主题、画布平移缩放与滚动，按 100ms 节流向 `LiquidGlassSurface` 提供 `data-glass-ink`（`dark` / `light`）与混色护眼判定。
+- **[useAdaptiveGlassContrast.ts](../hooks/useAdaptiveGlassContrast.ts)**：通过命令式 Store 订阅、`sampleKey` 重定位触发与 `220ms`（上限 `500ms`）平移防抖向 `GlassContrastContext` 提供 `16×16` 空间亮度网格与局部反色更新，避免拖拽期同步 `getImageData` 停顿。
 - **[useCanvasPan.ts](../hooks/useCanvasPan.ts)**：指针捕获级统一平移状态机，支持中键、中键+左键、`Alt`+左键、`Space`+左键、抓手工具拖动，以及中键双击适应视口和失焦防卡死复位。
 - **[useCanvasViewport.ts](../hooks/useCanvasViewport.ts)**：自适应视口、100% 居中与指针中心滚轮缩放。
 - **[useEditorShortcuts.ts](../hooks/useEditorShortcuts.ts)**：编辑快捷键（`V`/`H`/`1~8`/`G`/`B`/`Ctrl+Z`/`Ctrl+C/V/D`/`Ctrl+S`/`?`/`F1`/方向键微调）。
