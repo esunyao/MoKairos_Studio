@@ -3,6 +3,7 @@ import {
   Cpu,
   GitBranch,
   Home,
+  Keyboard,
   Moon,
   Radio,
   Redo2,
@@ -17,6 +18,7 @@ import { Button } from "@/components/ui/Button";
 import { SimpleSelect, Tooltip } from "@/components/ui/Controls";
 import { cn } from "@/components/ui/cn";
 import { saveCurrentProject } from "@/services/projectActions";
+import { navigateToLaunchpadWithGuard } from "@/services/unsavedGuard";
 import { useAppStore, type WorkspaceView } from "@/stores/useAppStore";
 import { useCanvasStore } from "@/stores/useCanvasStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
@@ -25,7 +27,7 @@ import { useVersionStore } from "@/stores/useVersionStore";
 
 /**
  * 44px 半透明磨砂玻璃顶部主控栏
- * 承担工作流三态切换（编辑/模拟/导出）、撤销重做、阵营切换、版本抽屉、明暗主题切换与保存动作
+ * 承担工作流三态切换（带未保存离开守卫的返回大厅）、撤销重做、阵营切换、版本抽屉、快捷键指南与明暗主题切换
  */
 
 const WORKSPACE_TABS: ReadonlyArray<{
@@ -46,6 +48,7 @@ export function AppTitleBar() {
   const setVersionDrawerOpen = useAppStore((s) => s.setVersionDrawerOpen);
   const versionDrawerOpen = useAppStore((s) => s.versionDrawerOpen);
   const setSettingsModalOpen = useAppStore((s) => s.setSettingsModalOpen);
+  const setShortcutsModalOpen = useAppStore((s) => s.setShortcutsModalOpen);
 
   const doc = useDocumentStore((s) => s.doc);
   const setActiveFrame = useDocumentStore((s) => s.setActiveFrame);
@@ -64,11 +67,11 @@ export function AppTitleBar() {
 
   return (
     <header className="mk-glass mk-theme-transition relative z-30 flex h-[var(--mk-topbar-height)] shrink-0 items-center justify-between border-b px-3">
-      {/* 左侧：品牌 + 返回大厅 + 工程/画面选择 */}
+      {/* 左侧：品牌 + 带守卫的返回大厅 + 工程/画面选择 */}
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
-          onClick={() => setView("launchpad")}
+          onClick={navigateToLaunchpadWithGuard}
           className="flex items-center gap-2 rounded-[var(--mk-radius-sm)] px-1.5 py-1 transition-colors hover:bg-[var(--mk-bg-surface-hover)] cursor-pointer"
           title="返回工程大厅"
         >
@@ -87,7 +90,7 @@ export function AppTitleBar() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setView("launchpad")}
+                onClick={navigateToLaunchpadWithGuard}
                 aria-label="工程大厅"
               >
                 <Home className="h-3.5 w-3.5" />
@@ -100,14 +103,14 @@ export function AppTitleBar() {
               </span>
               {isDirty && (
                 <span
-                  className="h-2 w-2 rounded-full bg-[var(--mk-status-warn)]"
+                  className="h-2 w-2 shrink-0 rounded-full bg-[var(--mk-status-warn)]"
                   title="有未保存更改"
                 />
               )}
             </div>
 
             {doc.frames.length > 0 && (
-              <div className="hidden w-32 md:block">
+              <div className="hidden w-36 md:block">
                 <SimpleSelect
                   value={doc.activeFrameId}
                   onValueChange={setActiveFrame}
@@ -159,7 +162,7 @@ export function AppTitleBar() {
         </div>
       )}
 
-      {/* 右侧：撤销重做、版本控制、阵营切换、明暗切换、保存 */}
+      {/* 右侧：撤销重做、版本控制、阵营切换、快捷键指南、明暗切换、保存 */}
       <div className="flex items-center gap-1.5">
         {view !== "launchpad" && (
           <>
@@ -232,6 +235,17 @@ export function AppTitleBar() {
             回到当前编辑
           </Button>
         )}
+
+        <Tooltip content="快捷键与键鼠操作指南 (? / F1)">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShortcutsModalOpen(true)}
+            aria-label="快捷键指南"
+          >
+            <Keyboard className="h-3.5 w-3.5" />
+          </Button>
+        </Tooltip>
 
         <Tooltip content={theme === "dark" ? "切换到浅色模式" : "切换到暗色模式"}>
           <Button

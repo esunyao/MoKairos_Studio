@@ -6,6 +6,7 @@ import {
   FolderOpen,
   FolderUp,
   Home,
+  Keyboard,
   LayoutTemplate,
   Plus,
   Radio,
@@ -47,6 +48,7 @@ const ROLE_FILTERS: ReadonlyArray<{ id: "all" | RobotRole2027; label: string }> 
 export function LaunchpadView() {
   const openNewProjectModal = useAppStore((s) => s.openNewProjectModal);
   const setView = useAppStore((s) => s.setView);
+  const setShortcutsModalOpen = useAppStore((s) => s.setShortcutsModalOpen);
   const recentProjects = useProjectStore((s) => s.recentProjects);
   const refreshRecentProjects = useProjectStore((s) => s.refreshRecentProjects);
   const removeRecentProject = useProjectStore((s) => s.removeRecentProject);
@@ -136,6 +138,15 @@ export function LaunchpadView() {
               <Radio className="h-4 w-4" />
               <span>启动 HUD 模拟器</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setShortcutsModalOpen(true)}
+              className="flex w-full items-center gap-2.5 rounded-[var(--mk-radius-sm)] px-2.5 py-2 font-medium text-[var(--mk-text-secondary)] transition-colors hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
+            >
+              <Keyboard className="h-4 w-4" />
+              <span>快捷键操作指南</span>
+            </button>
           </nav>
         </div>
 
@@ -196,7 +207,7 @@ export function LaunchpadView() {
                   新建 1920×1080 HUD
                 </div>
                 <div className="mt-1 text-xs text-[var(--mk-text-secondary)]">
-                  选择 2027 兵种与避开官方遮挡区的初始模板
+                  选择 2027 兵种与 1920×1080 标准初始模板
                 </div>
               </div>
             </motion.button>

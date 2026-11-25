@@ -1,21 +1,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Circle as KonvaCircle,
   Group,
   Image as KonvaImage,
   Layer,
   Rect as KonvaRect,
   Shape,
   Stage,
-  Text as KonvaText,
   Transformer,
 } from "react-konva";
 import type Konva from "konva";
+import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  ClipboardPaste,
+  Copy,
+  CopyPlus,
+  Crosshair,
+  EyeOff,
+  Grid3x3,
+  Image as ImageIcon,
+  Lock,
+  Maximize2,
+  Plus,
+  Trash2,
+  Unlock,
+} from "lucide-react";
 import clientBgUrl from "@/assets/rm-client-background.png";
 import {
+  ContextMenu,
+  type ContextMenuEntry,
+  type ContextMenuState,
+} from "@/components/ui/ContextMenu";
+import {
+  GRAPHIC_KIND_METAS,
   RM_CANVAS_HEIGHT,
   RM_CANVAS_WIDTH,
-  SAFE_AREA_ZONES,
   type GraphicKind,
 } from "@/domain/protocol/constants";
 import {
@@ -23,7 +44,8 @@ import {
   getGraphicRmBoundingBox,
   rmYToCanvasY,
 } from "@/domain/protocol/geometry";
-import type { MkuiFrame, MkuiGraphic } from "@/domain/protocol/types";
+import type { LayerIndex, MkuiFrame, MkuiGraphic } from "@/domain/protocol/types";
+import { useCanvasPan } from "@/hooks/useCanvasPan";
 import { useCanvasViewport } from "@/hooks/useCanvasViewport";
 import { useCanvasStore } from "@/stores/useCanvasStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
@@ -33,7 +55,7 @@ import { GraphicNode } from "./graphics/GraphicNode";
 
 /**
  * 1920×1080 RoboMaster 客户端核心画布舞台
- * 复用模式：editable=true 为编辑工作台；editable=false + simOverrides 为模拟器只读视口
+ * 支持：中键/中键+左键/Alt+左键/Space+左键平移、双中键适应视口、自定义右键菜单与 8 类协议图元交互
  */
 
 function useHtmlImage(src: string | null): HTMLImageElement | null {
@@ -75,6 +97,7 @@ export function CanvasStage({
   const didAutoFitRef = useRef(false);
 
   const [size, setSize] = useState({ width: 900, height: 600 });
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [marquee, setMarquee] = useState<{
     x1: number;
     y1: number;
@@ -94,32 +117,31 @@ export function CanvasStage({
   const setSelectedIds = useCanvasStore((s) => s.setSelectedIds);
   const toggleSelection = useCanvasStore((s) => s.toggleSelection);
   const clearSelection = useCanvasStore((s) => s.clearSelection);
+  const clipboard = useCanvasStore((s) => s.clipboard);
+  const setClipboard = useCanvasStore((s) => s.setClipboard);
   const visibleLayers = useCanvasStore((s) => s.visibleLayers);
   const previewTeam = useCanvasStore((s) => s.previewTeam);
   const showGrid = useCanvasStore((s) => s.showGrid);
-  const showSafeArea = useCanvasStore((s) => s.showSafeArea);
   const showBackground = useCanvasStore((s) => s.showBackground);
   const backgroundOpacity = useCanvasStore((s) => s.backgroundOpacity);
   const customBackgroundUrl = useCanvasStore((s) => s.customBackgroundUrl);
   const scale = useCanvasStore((s) => s.scale);
   const offsetX = useCanvasStore((s) => s.offsetX);
   const offsetY = useCanvasStore((s) => s.offsetY);
-  const setViewport = useCanvasStore((s) => s.setViewport);
   const cursorRm = useCanvasStore((s) => s.cursorRm);
   const setCursorRm = useCanvasStore((s) => s.setCursorRm);
 
   const toggleGrid = useCanvasStore((s) => s.toggleGrid);
-  const toggleSafeArea = useCanvasStore((s) => s.toggleSafeArea);
   const toggleBackground = useCanvasStore((s) => s.toggleBackground);
 
   const addGraphic = useDocumentStore((s) => s.addGraphic);
   const updateGraphic = useDocumentStore((s) => s.updateGraphic);
+  const updateGraphicsBatch = useDocumentStore((s) => s.updateGraphicsBatch);
+  const deleteGraphics = useDocumentStore((s) => s.deleteGraphics);
+  const duplicateGraphics = useDocumentStore((s) => s.duplicateGraphics);
+  const alignGraphics = useDocumentStore((s) => s.alignGraphics);
 
   const { fitToViewport, resetTo100, handleWheelZoom } = useCanvasViewport();
-
-  const officialBg = useHtmlImage(clientBgUrl);
-  const customBg = useHtmlImage(customBackgroundUrl);
-  const activeBgImage = customBg ?? officialBg;
 
   // 监听容器尺寸，并在首次挂载时自适应居中 1920×1080 画板
   useEffect(() => {
@@ -152,6 +174,23 @@ export function CanvasStage({
   useEffect(() => {
     onRegisterViewportControls?.({ fit: handleFit, zoom100: handleZoom100 });
   }, [onRegisterViewportControls, handleFit, handleZoom100]);
+
+  const { isPanning, cursor, panHandlers } = useCanvasPan({
+    editable,
+    onFitViewport: handleFit,
+  });
+
+  // 平移开始时清理未完成的框选或绘制预览
+  useEffect(() => {
+    if (isPanning) {
+      setMarquee(null);
+      setDrawStart(null);
+    }
+  }, [isPanning]);
+
+  const officialBg = useHtmlImage(clientBgUrl);
+  const customBg = useHtmlImage(customBackgroundUrl);
+  const activeBgImage = customBg ?? officialBg;
 
   const registerNodeRef = useCallback((id: string, node: Konva.Node | null) => {
     if (node) {
@@ -220,7 +259,10 @@ export function CanvasStage({
   };
 
   const handleStageMouseDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
-    if (!editable) return;
+    if (!editable || isPanning) return;
+    // 只响应左键进行选框/绘制；中键和右键分别由平移状态机与上下文菜单处理
+    if (e.evt.button !== 0 || e.evt.altKey) return;
+
     const isEmptyHit =
       e.target === e.target.getStage() ||
       e.target.name() === "artboard-backdrop";
@@ -260,7 +302,7 @@ export function CanvasStage({
     if (pt) {
       setCursorRm({ x: pt.x, y: pt.y });
     }
-    if (!editable) return;
+    if (!editable || isPanning) return;
 
     if (marquee && pt) {
       setMarquee((prev) =>
@@ -274,7 +316,7 @@ export function CanvasStage({
   };
 
   const handleStageMouseUp = () => {
-    if (!editable) return;
+    if (!editable || isPanning) return;
 
     if (marquee) {
       const minX = Math.min(marquee.x1, marquee.x2);
@@ -338,19 +380,263 @@ export function CanvasStage({
     [updateGraphic],
   );
 
-  const isPanMode = !editable || activeTool === "pan";
+  /** 在画布容器上弹出自定义磨砂玻璃右键菜单（屏蔽浏览器默认菜单） */
+  const handleContainerContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const stage = stageRef.current;
+    const container = containerRef.current;
+    if (!stage || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    const pointerX = e.clientX - rect.left;
+    const pointerY = e.clientY - rect.top;
+    const artRm = canvasPointToRm(
+      (pointerX - offsetX) / scale,
+      (pointerY - offsetY) / scale,
+    );
+
+    if (!editable) {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        items: [
+          {
+            id: "sim-fit",
+            label: "适应视口",
+            icon: <Maximize2 className="h-3.5 w-3.5" />,
+            shortcut: "双击中键",
+            onSelect: handleFit,
+          },
+          {
+            id: "sim-100",
+            label: "缩放到 100%",
+            onSelect: handleZoom100,
+          },
+          { type: "separator", id: "sim-sep" },
+          {
+            id: "sim-grid",
+            label: showGrid ? "隐藏点阵网格" : "显示点阵网格",
+            icon: <Grid3x3 className="h-3.5 w-3.5" />,
+            onSelect: toggleGrid,
+          },
+          {
+            id: "sim-bg",
+            label: showBackground ? "隐藏官方底图" : "显示官方底图",
+            icon: <ImageIcon className="h-3.5 w-3.5" />,
+            onSelect: toggleBackground,
+          },
+        ],
+      });
+      return;
+    }
+
+    // 探测鼠标下的图元节点
+    const hitShape = stage.getIntersection({ x: pointerX, y: pointerY });
+    const graphicIdSet = new Set(frame.graphics.map((g) => g.id));
+    let hitGraphicId: string | null = null;
+    let cursorNode: Konva.Node | null = hitShape ?? null;
+    while (cursorNode) {
+      const nodeId = cursorNode.id();
+      if (nodeId && graphicIdSet.has(nodeId)) {
+        hitGraphicId = nodeId;
+        break;
+      }
+      cursorNode = cursorNode.getParent();
+    }
+
+    if (hitGraphicId) {
+      const activeTargetIds = selectedIds.includes(hitGraphicId)
+        ? selectedIds
+        : [hitGraphicId];
+      if (!selectedIds.includes(hitGraphicId)) {
+        setSelectedIds([hitGraphicId]);
+      }
+
+      const targetGraphics = frame.graphics.filter((g) =>
+        activeTargetIds.includes(g.id),
+      );
+      const first = targetGraphics[0];
+      const allLocked = targetGraphics.every((g) => g.locked);
+
+      const items: ContextMenuEntry[] = [
+        {
+          id: "ctx-copy",
+          label: "复制",
+          icon: <Copy className="h-3.5 w-3.5" />,
+          shortcut: "Ctrl+C",
+          onSelect: () => setClipboard(targetGraphics),
+        },
+        {
+          id: "ctx-dup",
+          label: "再制图元",
+          icon: <CopyPlus className="h-3.5 w-3.5" />,
+          shortcut: "Ctrl+D",
+          onSelect: () => {
+            const created = duplicateGraphics(activeTargetIds);
+            setSelectedIds(created.map((g) => g.id));
+          },
+        },
+        { type: "separator", id: "ctx-sep-1" },
+        {
+          id: "ctx-layer-up",
+          label: "图层上移一层",
+          icon: <ArrowUp className="h-3.5 w-3.5" />,
+          disabled: !first || first.layer >= 9,
+          onSelect: () => {
+            if (!first) return;
+            updateGraphicsBatch(activeTargetIds, {
+              layer: Math.min(9, first.layer + 1) as LayerIndex,
+            });
+          },
+        },
+        {
+          id: "ctx-layer-down",
+          label: "图层下移一层",
+          icon: <ArrowDown className="h-3.5 w-3.5" />,
+          disabled: !first || first.layer <= 0,
+          onSelect: () => {
+            if (!first) return;
+            updateGraphicsBatch(activeTargetIds, {
+              layer: Math.max(0, first.layer - 1) as LayerIndex,
+            });
+          },
+        },
+        {
+          id: "ctx-layer-top",
+          label: "置顶到 L9",
+          icon: <ArrowUpToLine className="h-3.5 w-3.5" />,
+          onSelect: () => updateGraphicsBatch(activeTargetIds, { layer: 9 }),
+        },
+        {
+          id: "ctx-layer-bottom",
+          label: "置底到 L0",
+          icon: <ArrowDownToLine className="h-3.5 w-3.5" />,
+          onSelect: () => updateGraphicsBatch(activeTargetIds, { layer: 0 }),
+        },
+        {
+          id: "ctx-align-center",
+          label: "对齐到画布中心",
+          icon: <Crosshair className="h-3.5 w-3.5" />,
+          onSelect: () => alignGraphics(activeTargetIds, "canvasCenter"),
+        },
+        { type: "separator", id: "ctx-sep-2" },
+        {
+          id: "ctx-lock",
+          label: allLocked ? "解锁图元" : "锁定图元",
+          icon: allLocked ? (
+            <Unlock className="h-3.5 w-3.5" />
+          ) : (
+            <Lock className="h-3.5 w-3.5" />
+          ),
+          onSelect: () =>
+            updateGraphicsBatch(activeTargetIds, { locked: !allLocked }),
+        },
+        {
+          id: "ctx-hide",
+          label: "隐藏图元",
+          icon: <EyeOff className="h-3.5 w-3.5" />,
+          onSelect: () => {
+            updateGraphicsBatch(activeTargetIds, { visible: false });
+            clearSelection();
+          },
+        },
+        { type: "separator", id: "ctx-sep-3" },
+        {
+          id: "ctx-del",
+          label: "删除",
+          icon: <Trash2 className="h-3.5 w-3.5" />,
+          shortcut: "Delete",
+          danger: true,
+          onSelect: () => {
+            deleteGraphics(activeTargetIds);
+            clearSelection();
+          },
+        },
+      ];
+
+      setContextMenu({ x: e.clientX, y: e.clientY, items });
+      return;
+    }
+
+    // 空白画布右键菜单
+    const existingIds = new Set(frame.graphics.map((g) => g.id));
+    const pasteableIds = clipboard
+      .map((item) => item.id)
+      .filter((id) => existingIds.has(id));
+
+    const blankItems: ContextMenuEntry[] = [
+      {
+        id: "ctx-insert-submenu",
+        label: `在此处插入图元 (${artRm.x}, ${artRm.y})`,
+        icon: <Plus className="h-3.5 w-3.5" />,
+        children: GRAPHIC_KIND_METAS.map((meta, idx) => ({
+          id: `ctx-insert-${meta.kind}`,
+          label: meta.label,
+          shortcut: String(idx + 1),
+          onSelect: () => {
+            const created = addGraphic(meta.kind, {
+              rmX: artRm.x,
+              rmY: artRm.y,
+            });
+            setSelectedIds([created.id]);
+            setActiveTool("select");
+          },
+        })),
+      },
+      {
+        id: "ctx-paste",
+        label: "粘贴图元",
+        icon: <ClipboardPaste className="h-3.5 w-3.5" />,
+        shortcut: "Ctrl+V",
+        disabled: pasteableIds.length === 0,
+        onSelect: () => {
+          const pasted = duplicateGraphics(pasteableIds);
+          setSelectedIds(pasted.map((g) => g.id));
+        },
+      },
+      { type: "separator", id: "ctx-blank-sep-1" },
+      {
+        id: "ctx-fit",
+        label: "适应视口",
+        icon: <Maximize2 className="h-3.5 w-3.5" />,
+        shortcut: "Ctrl+0",
+        onSelect: handleFit,
+      },
+      {
+        id: "ctx-100",
+        label: "缩放到 100%",
+        shortcut: "Ctrl+1",
+        onSelect: handleZoom100,
+      },
+      { type: "separator", id: "ctx-blank-sep-2" },
+      {
+        id: "ctx-toggle-grid",
+        label: showGrid ? "隐藏点阵网格" : "显示点阵网格",
+        icon: <Grid3x3 className="h-3.5 w-3.5" />,
+        shortcut: "G",
+        onSelect: toggleGrid,
+      },
+      {
+        id: "ctx-toggle-bg",
+        label: showBackground ? "隐藏官方底图" : "显示官方底图",
+        icon: <ImageIcon className="h-3.5 w-3.5" />,
+        shortcut: "B",
+        onSelect: toggleBackground,
+      },
+    ];
+
+    setContextMenu({ x: e.clientX, y: e.clientY, items: blankItems });
+  };
 
   return (
     <div
       ref={containerRef}
+      {...panHandlers}
+      onContextMenu={handleContainerContextMenu}
       className="relative h-full w-full flex-1 overflow-hidden bg-[var(--mk-bg-canvas)]"
-      style={{
-        cursor: isPanMode
-          ? "grab"
-          : activeTool !== "select"
-            ? "crosshair"
-            : "default",
-      }}
+      style={{ cursor }}
     >
       {editable && <AlignToolbar />}
 
@@ -362,13 +648,8 @@ export function CanvasStage({
         y={offsetY}
         scaleX={scale}
         scaleY={scale}
-        draggable={isPanMode}
+        draggable={false}
         onWheel={handleWheelZoom}
-        onDragEnd={(e) => {
-          if (e.target === e.target.getStage()) {
-            setViewport(scale, e.target.x(), e.target.y());
-          }
-        }}
         onMouseDown={handleStageMouseDown}
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
@@ -448,52 +729,6 @@ export function CanvasStage({
               />
             ))}
 
-            {/* Safe Area 官方遮挡禁区叠加蒙版 */}
-            {showSafeArea && (
-              <Group listening={false}>
-                {SAFE_AREA_ZONES.map((zone) => {
-                  if (zone.shape === "rect") {
-                    const topCanvasY = rmYToCanvasY(zone.y + zone.height);
-                    return (
-                      <Group key={zone.id}>
-                        <KonvaRect
-                          x={zone.x}
-                          y={topCanvasY}
-                          width={zone.width}
-                          height={zone.height}
-                          fill="rgba(239, 68, 68, 0.14)"
-                          stroke="rgba(239, 68, 68, 0.85)"
-                          strokeWidth={2}
-                          dash={[10, 6]}
-                        />
-                        <KonvaText
-                          x={zone.x + 12}
-                          y={topCanvasY + 10}
-                          text={`禁区 · ${zone.label}`}
-                          fontSize={16}
-                          fontFamily="Inter, PingFang SC, sans-serif"
-                          fill="#fca5a5"
-                        />
-                      </Group>
-                    );
-                  }
-                  return (
-                    <Group key={zone.id}>
-                      <KonvaCircle
-                        x={zone.cx}
-                        y={rmYToCanvasY(zone.cy)}
-                        radius={zone.r}
-                        fill="rgba(239, 68, 68, 0.14)"
-                        stroke="rgba(239, 68, 68, 0.85)"
-                        strokeWidth={2}
-                        dash={[8, 6]}
-                      />
-                    </Group>
-                  );
-                })}
-              </Group>
-            )}
-
             {/* 框选矩形 */}
             {marquee && (
               <KonvaRect
@@ -565,20 +800,9 @@ export function CanvasStage({
               ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
               : "text-[var(--mk-text-muted)]"
           }`}
+          title="切换点阵网格显示 (G)"
         >
           点阵
-        </button>
-        <button
-          type="button"
-          onClick={toggleSafeArea}
-          className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-            showSafeArea
-              ? "bg-[var(--mk-status-error-tint)] text-[var(--mk-status-error)]"
-              : "text-[var(--mk-text-muted)]"
-          }`}
-          title="切换官方客户端 4 大遮挡禁区显示 (G)"
-        >
-          安全区
         </button>
         <button
           type="button"
@@ -597,6 +821,9 @@ export function CanvasStage({
           RM ({cursorRm ? `${cursorRm.x}, ${cursorRm.y}` : "—, —"})
         </span>
       </div>
+
+      {/* 自定义右键菜单 */}
+      <ContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
   );
 }

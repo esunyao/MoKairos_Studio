@@ -2,17 +2,19 @@ import { create } from "zustand";
 import type { StarterTemplateId } from "@/domain/templates/starterTemplates";
 
 /**
- * 全局应用外壳与视图路由状态
+ * 全局应用外壳、视图路由、主题与弹窗状态
  */
 
 export type WorkspaceView = "launchpad" | "design" | "simulate" | "export";
 export type ThemeMode = "dark" | "light";
 
-export interface ToastItem {
-  id: string;
-  tone: "info" | "success" | "warn" | "error";
+export interface UnsavedPromptState {
   title: string;
-  description?: string;
+  description: string;
+  saveAndContinueLabel: string;
+  discardLabel: string;
+  onSaveAndContinue: () => Promise<void> | void;
+  onDiscard: () => Promise<void> | void;
 }
 
 interface AppState {
@@ -23,7 +25,8 @@ interface AppState {
   newProjectModalOpen: boolean;
   newProjectDefaultTemplate: StarterTemplateId;
   settingsModalOpen: boolean;
-  toasts: ToastItem[];
+  shortcutsModalOpen: boolean;
+  unsavedPrompt: UnsavedPromptState | null;
 
   setView: (view: WorkspaceView) => void;
   setTheme: (theme: ThemeMode) => void;
@@ -33,8 +36,9 @@ interface AppState {
   openNewProjectModal: (templateId?: StarterTemplateId) => void;
   closeNewProjectModal: () => void;
   setSettingsModalOpen: (open: boolean) => void;
-  pushToast: (toast: Omit<ToastItem, "id">) => void;
-  dismissToast: (id: string) => void;
+  setShortcutsModalOpen: (open: boolean) => void;
+  openUnsavedPrompt: (prompt: UnsavedPromptState) => void;
+  closeUnsavedPrompt: () => void;
 }
 
 function readInitialTheme(): ThemeMode {
@@ -60,7 +64,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   newProjectModalOpen: false,
   newProjectDefaultTemplate: "infantry_combat",
   settingsModalOpen: false,
-  toasts: [],
+  shortcutsModalOpen: false,
+  unsavedPrompt: null,
 
   setView: (view) => set({ view }),
 
@@ -97,14 +102,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   setSettingsModalOpen: (open) => set({ settingsModalOpen: open }),
 
-  pushToast: (toast) => {
-    const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-    set((s) => ({ toasts: [...s.toasts.slice(-4), { ...toast, id }] }));
-    setTimeout(() => {
-      get().dismissToast(id);
-    }, 4200);
-  },
+  setShortcutsModalOpen: (open) => set({ shortcutsModalOpen: open }),
 
-  dismissToast: (id) =>
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  openUnsavedPrompt: (unsavedPrompt) => set({ unsavedPrompt }),
+
+  closeUnsavedPrompt: () => set({ unsavedPrompt: null }),
 }));

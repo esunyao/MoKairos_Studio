@@ -1,12 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
+import { toast } from "@/components/ui/toast";
 import { GRAPHIC_KIND_METAS } from "@/domain/protocol/constants";
 import { saveCurrentProject } from "@/services/projectActions";
 import { useAppStore } from "@/stores/useAppStore";
-import { useCanvasStore, type CanvasTool } from "@/stores/useCanvasStore";
+import { useCanvasStore } from "@/stores/useCanvasStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
 
 /**
- * 编辑工作台全局快捷键 Hook（带输入框焦点保护与 Space 临时抓手）
+ * 编辑工作台全局快捷键 Hook（带输入框焦点保护与快捷键帮助呼出）
+ * 注：Space / Alt / 鼠标中键临时平移已由 useCanvasPan 在指针捕获层统一接管
  */
 
 function isTypingTarget(target: EventTarget | null): boolean {
@@ -27,8 +29,6 @@ export function useEditorShortcuts(params: {
   onFitViewport: () => void;
   onZoom100: () => void;
 }) {
-  const prevToolBeforeSpaceRef = useRef<CanvasTool | null>(null);
-
   useEffect(() => {
     if (!params.enabled) {
       return;
@@ -43,6 +43,20 @@ export function useEditorShortcuts(params: {
       const key = e.key.toLowerCase();
       const canvas = useCanvasStore.getState();
       const docStore = useDocumentStore.getState();
+
+      // 呼出快捷键帮助弹窗 (? 或 F1)
+      if (e.key === "?" || e.key === "F1") {
+        e.preventDefault();
+        const app = useAppStore.getState();
+        app.setShortcutsModalOpen(!app.shortcutsModalOpen);
+        return;
+      }
+
+      // 屏蔽 Space 页面滚动，具体拖动由 useCanvasPan 接管
+      if (e.code === "Space") {
+        e.preventDefault();
+        return;
+      }
 
       // 保存 / 另存为
       if (mod && key === "s") {
@@ -78,10 +92,7 @@ export function useEditorShortcuts(params: {
         );
         if (copied.length > 0) {
           canvas.setClipboard(copied);
-          useAppStore.getState().pushToast({
-            tone: "info",
-            title: `已复制 ${copied.length} 个图元`,
-          });
+          toast.info(`已复制 ${copied.length} 个图元`);
         }
         return;
       }
@@ -164,21 +175,11 @@ export function useEditorShortcuts(params: {
         return;
       }
 
-      // 临时抓手 Space
-      if (e.code === "Space" && !e.repeat) {
-        e.preventDefault();
-        if (prevToolBeforeSpaceRef.current === null) {
-          prevToolBeforeSpaceRef.current = canvas.activeTool;
-          canvas.setActiveTool("pan");
-        }
-        return;
-      }
-
       // 单键切换工具与辅助层
       if (!mod && !e.altKey) {
         if (key === "v") canvas.setActiveTool("select");
         else if (key === "h") canvas.setActiveTool("pan");
-        else if (key === "g") canvas.toggleSafeArea();
+        else if (key === "g") canvas.toggleGrid();
         else if (key === "b") canvas.toggleBackground();
         else if (key === "escape") {
           canvas.setActiveTool("select");
@@ -190,18 +191,9 @@ export function useEditorShortcuts(params: {
       }
     };
 
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.code === "Space" && prevToolBeforeSpaceRef.current !== null) {
-        useCanvasStore.getState().setActiveTool(prevToolBeforeSpaceRef.current);
-        prevToolBeforeSpaceRef.current = null;
-      }
-    };
-
     window.addEventListener("keydown", handleKeyDown);
-    window.addEventListener("keyup", handleKeyUp);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      window.removeEventListener("keyup", handleKeyUp);
     };
   }, [params.enabled, params.onFitViewport, params.onZoom100]);
 }

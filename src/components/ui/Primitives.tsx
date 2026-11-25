@@ -50,3 +50,22 @@ export interface BadgeProps
 export function Badge({ className, tone, ...props }: BadgeProps) {
   return <span className={cn(badgeVariants({ tone }), className)} {...props} />;
 }
+
+/** 键盘按键帽展示组件（用于快捷键指南与上下文菜单） */
+export function Kbd({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLElement>) {
+  return (
+    <kbd
+      className={cn(
+        "mk-tabular inline-flex min-w-[22px] items-center justify-center rounded-[5px] border border-[var(--mk-border-strong)] bg-[var(--mk-bg-surface)] px-1.5 py-0.5 text-[11px] font-medium leading-none text-[var(--mk-text-primary)] shadow-[0_1px_0_var(--mk-border-strong)]",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </kbd>
+  );
+}
