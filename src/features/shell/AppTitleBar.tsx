@@ -76,6 +76,7 @@ export function AppTitleBar() {
         variant="bar"
         cornerRadius={0}
         elastic={false}
+        lightweight
         className="h-full w-full border-b"
         contentClassName="flex h-full w-full items-center justify-between px-3"
       >

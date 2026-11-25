@@ -99,7 +99,7 @@ function MenuPanel({
 
             {subOpen && entry.children && (
               <div className="absolute top-0 left-full ml-1">
-                <LiquidGlassSurface cornerRadius={12} elastic={false}>
+                <LiquidGlassSurface cornerRadius={12} elastic={false} lightweight>
                   <MenuPanel items={entry.children} onClose={onClose} />
                 </LiquidGlassSurface>
               </div>
@@ -181,7 +181,7 @@ export function ContextMenu({
             style={{ left: pos.left, top: pos.top }}
             className="fixed"
           >
-            <LiquidGlassSurface cornerRadius={12} elastic={false}>
+            <LiquidGlassSurface cornerRadius={12} elastic={false} lightweight>
               <MenuPanel items={state.items} onClose={onClose} />
             </LiquidGlassSurface>
           </motion.div>

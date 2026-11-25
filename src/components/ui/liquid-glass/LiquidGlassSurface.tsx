@@ -259,7 +259,12 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
 
     const blurPx =
       (liquidGlass.overLight ? 12 : 4) + liquidGlass.blurAmount * 32;
-    const backdropFilterValue = `blur(${blurPx.toFixed(1)}px) saturate(${liquidGlass.saturation}%)`;
+    // 折射滤镜直接作用于「背景」(backdrop-filter: url(#id))，不再对元素自身绘制内容施加位移，
+    // 否则自身的描边、阴影与文字会被位移并产生彩色重影与漂浮彩边
+    const baseBackdrop = `blur(${blurPx.toFixed(1)}px) saturate(${liquidGlass.saturation}%)`;
+    const backdropFilterValue = supportsSvg
+      ? `url(#${filterId}) ${baseBackdrop}`
+      : baseBackdrop;
     const angle = 135 + mouseOffset.x * 1.2;
 
     const outerShadow =
@@ -332,14 +337,21 @@ export const LiquidGlassSurface = forwardRef<HTMLDivElement, LiquidGlassSurfaceP
           <span
             className="mk-liquid-warp absolute inset-0 block"
             style={{
-              filter: supportsSvg ? `url(#${filterId})` : undefined,
               backdropFilter: backdropFilterValue,
               WebkitBackdropFilter: backdropFilterValue,
+              borderRadius: `${cornerRadius}px`,
+            }}
+          />
+
+          {/* 不参与折射的表面微着色层 + 细描边（独立于滤镜层，避免彩边与重影） */}
+          <span
+            className="absolute inset-0 block"
+            style={{
               backgroundColor: liquidGlass.overLight
                 ? "rgba(0, 0, 0, 0.24)"
                 : ink === "dark"
-                  ? "rgba(255, 255, 255, 0.2)"
-                  : "rgba(255, 255, 255, 0.04)",
+                  ? "rgba(255, 255, 255, 0.34)"
+                  : "rgba(255, 255, 255, 0.06)",
               boxShadow: hairlineBorderShadow,
               borderRadius: `${cornerRadius}px`,
             }}

@@ -143,6 +143,7 @@ export function VersionDrawer() {
               variant="panel"
               cornerRadius={0}
               elastic={false}
+              lightweight
               className="flex h-full w-full flex-col border-l border-[var(--mk-border-subtle)]"
               contentClassName="flex min-h-0 flex-1 flex-col"
             >

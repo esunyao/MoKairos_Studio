@@ -34,6 +34,7 @@ export function DialogContent({
         <LiquidGlassSurface
           cornerRadius={16}
           elastic={false}
+          lightweight
           contentClassName="p-5 text-[var(--mk-text-primary)]"
         >
           <div className="mb-4 flex items-start justify-between gap-3">

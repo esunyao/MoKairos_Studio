@@ -78,6 +78,7 @@ export function ToastItem({
       <LiquidGlassSurface
         cornerRadius={12}
         elastic={false}
+        lightweight
         contentClassName="relative overflow-hidden rounded-[12px] p-3 pl-3.5 text-xs"
       >
         <span
