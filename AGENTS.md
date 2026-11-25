@@ -48,7 +48,7 @@
 
 编码与复用规范：
 - 页面展示（`src/features/`）与纯领域逻辑（`src/domain/`）、状态切片（`src/stores/`）、IPC 服务（`src/services/`）、交互编排（`src/hooks/`）严格分离，核心文件与函数保留中文注释。
-- 公共交互组件优先复用，不重复造轮子：消息通知统一调用 `@/components/ui/toast`，右键菜单统一使用 `@/components/ui/ContextMenu`，未保存离开守卫统一走 `@/services/unsavedGuard`。
+- 公共交互组件优先复用，不重复造轮子：消息通知统一调用 `@/components/ui/toast`，右键菜单统一使用 `@/components/ui/ContextMenu`，未保存离开守卫统一走 `@/services/unsavedGuard`，液态玻璃/普通质感外壳容器统一使用 `@/components/ui/liquid-glass`。
 
 ## 审计与交付交接规范
 

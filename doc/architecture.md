@@ -37,9 +37,9 @@ MoKairos_Studio/
 │   ├── assets/rm-client-background.png     # 原生 1920×1080 官方底图（只作参考，不导出）
 │   ├── domain/                             # 纯 TS 领域引擎（零 UI 依赖，Vitest 覆盖）
 │   ├── stores/                             # Zustand 6 个状态切片
-│   ├── services/                           # Tauri IPC、.mkui 读写、未保存守卫、最近工程
-│   ├── hooks/                              # 视口缩放、指针捕获平移、快捷键、实时诊断
-│   ├── components/                         # 公共复用组件（toast、ContextMenu、Dialog、Controls 等）与协议控件
+│   ├── services/                           # Tauri IPC、.mkui 读写、未保存守卫、背景亮度采样、最近工程
+│   ├── hooks/                              # 视口缩放、指针捕获平移、快捷键、实时诊断、自适应玻璃反色
+│   ├── components/                         # 公共复用组件（liquid-glass、toast、ContextMenu、Dialog 等）与协议控件
 │   └── features/                           # 业务视图（shell、launchpad、editor、version-control、simulator、export-mock）
 └── src-tauri/                              # 【L2 Rust 桌面宿主与归档内核】
     ├── AGENTS.md                           # Rust 任务导航
