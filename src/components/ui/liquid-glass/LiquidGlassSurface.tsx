@@ -96,6 +96,7 @@ export const LiquidGlassSurface = forwardRef<
 
     const innerRef = useRef<HTMLDivElement | null>(null);
     const rimRef = useRef<HTMLSpanElement | null>(null);
+    const glowRef = useRef<HTMLSpanElement | null>(null);
     const rectRef = useRef<DOMRect | null>(null);
     const wasActiveRef = useRef(false);
 
@@ -104,6 +105,13 @@ export const LiquidGlassSurface = forwardRef<
 
     const [size, setSize] = useState({ width: 240, height: 44 });
     const [isHovered, setIsHovered] = useState(false);
+
+    const glowRadius = Math.round(
+      clamp(Math.min(size.width, size.height) * 0.65, 72, 180),
+    );
+    const glowDiameter = glowRadius * 2;
+    const glowRadiusRef = useRef(glowRadius);
+    glowRadiusRef.current = glowRadius;
 
     const isLiquid = surfaceStyle === "liquid";
 
@@ -256,6 +264,13 @@ export const LiquidGlassSurface = forwardRef<
           );
         }
 
+        if (isHovered && glowRef.current) {
+          const r = glowRadiusRef.current;
+          const gx = latestX - rect.left - r;
+          const gy = latestY - rect.top - r;
+          glowRef.current.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0)`;
+        }
+
         if (!enableElastic) {
           return;
         }
@@ -384,7 +399,23 @@ export const LiquidGlassSurface = forwardRef<
         }}
         onMouseEnter={(e) => {
           if (innerRef.current) {
-            rectRef.current = innerRef.current.getBoundingClientRect();
+            const rect = innerRef.current.getBoundingClientRect();
+            rectRef.current = rect;
+            if (glowRef.current) {
+              const r = glowRadiusRef.current;
+              const gx = e.clientX - rect.left - r;
+              const gy = e.clientY - rect.top - r;
+              glowRef.current.style.transform = `translate3d(${gx.toFixed(1)}px, ${gy.toFixed(1)}px, 0)`;
+            }
+            if (rimRef.current && rect.width > 0 && rect.height > 0) {
+              const dx = e.clientX - (rect.left + rect.width / 2);
+              const dy = e.clientY - (rect.top + rect.height / 2);
+              rimRef.current.style.background = buildRimGradient(
+                clamp((dx / rect.width) * 100, -50, 50),
+                clamp((dy / rect.height) * 100, -50, 50),
+                isDarkInk,
+              );
+            }
           }
           setIsHovered(true);
           onMouseEnter?.(e);
@@ -463,18 +494,22 @@ export const LiquidGlassSurface = forwardRef<
             }}
           />
 
-          {/* 悬停表面微高光 */}
-          {isHovered && (
-            <span
-              className="pointer-events-none absolute inset-0 block"
-              style={{
-                borderRadius: `${cornerRadius}px`,
-                backgroundImage:
-                  "radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 65%)",
-                mixBlendMode: "overlay",
-              }}
-            />
-          )}
+          {/* 悬停表面微高光（预光栅化圆斑 GPU 平移跟随鼠标指针，零重绘） */}
+          <span
+            ref={glowRef}
+            data-glass-glow="true"
+            className="pointer-events-none absolute top-0 left-0 block rounded-full transition-opacity duration-200 ease-out"
+            style={{
+              width: `${glowDiameter}px`,
+              height: `${glowDiameter}px`,
+              opacity: isHovered ? 1 : 0,
+              backgroundImage: isDarkInk
+                ? "radial-gradient(circle, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.14) 38%, rgba(255, 255, 255, 0) 70%)"
+                : "radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.08) 38%, rgba(255, 255, 255, 0) 70%)",
+              mixBlendMode: isDarkInk ? "screen" : "overlay",
+              willChange: "transform, opacity",
+            }}
+          />
         </div>
 
         {/* 前景内容层：不设 overflow-hidden，确保二级菜单与气泡完整溢出展示 */}
