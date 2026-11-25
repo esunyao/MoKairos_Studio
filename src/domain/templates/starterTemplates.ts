@@ -3,7 +3,7 @@ import { createStableId } from "../protocol/naming";
 import type { MkuiDocument, MkuiFrame, MkuiGroup } from "../protocol/types";
 
 /**
- * 开箱即用的 2027 兵种预设模板（全部以 RM 左下角原点标定，主动避开 4 大官方遮挡禁区）
+ * 开箱即用的 2027 兵种预设模板（全部以 RM 左下角原点 1920×1080 标定）
  */
 
 export type StarterTemplateId =

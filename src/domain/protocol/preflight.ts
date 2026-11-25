@@ -2,48 +2,16 @@ import {
   RM_CANVAS_HEIGHT,
   RM_CANVAS_WIDTH,
   RM_PROTOCOL_LIMITS,
-  SAFE_AREA_ZONES,
 } from "./constants";
-import { getGraphicRmBoundingBox, type RmBoundingBox } from "./geometry";
+import { getGraphicRmBoundingBox } from "./geometry";
 import { getUtf8ByteLength, isValidCIdentifier, isValidFigureName } from "./naming";
 import { calculatePacketBudget } from "./packetBudget";
-import type { MkuiDocument, MkuiFrame, MkuiGraphic, PreflightIssue } from "./types";
+import type { MkuiDocument, MkuiFrame, PreflightIssue } from "./types";
 
 /**
  * 2027 裁判系统协议预检引擎
- * 在导出、模拟或编辑提示阶段检查所有协议硬限制与官方遮挡禁区冲突
+ * 在导出、模拟或编辑提示阶段检查所有协议硬限制与视口越界情况
  */
-
-function intersectsRect(a: RmBoundingBox, b: { x: number; y: number; width: number; height: number }): boolean {
-  const bMaxX = b.x + b.width;
-  const bMaxY = b.y + b.height;
-  return a.minX < bMaxX && a.maxX > b.x && a.minY < bMaxY && a.maxY > b.y;
-}
-
-function intersectsCircle(box: RmBoundingBox, cx: number, cy: number, r: number): boolean {
-  const nearestX = Math.max(box.minX, Math.min(cx, box.maxX));
-  const nearestY = Math.max(box.minY, Math.min(cy, box.maxY));
-  const dx = nearestX - cx;
-  const dy = nearestY - cy;
-  return dx * dx + dy * dy <= r * r;
-}
-
-/** 检查单个图元是否落入官方客户端 4 大遮挡禁区 */
-export function detectSafeAreaCollisions(graphic: MkuiGraphic): string[] {
-  const box = getGraphicRmBoundingBox(graphic);
-  const hits: string[] = [];
-
-  for (const zone of SAFE_AREA_ZONES) {
-    if (zone.shape === "rect") {
-      if (intersectsRect(box, zone)) {
-        hits.push(zone.label);
-      }
-    } else if (intersectsCircle(box, zone.cx, zone.cy, zone.r)) {
-      hits.push(zone.label);
-    }
-  }
-  return hits;
-}
 
 /** 对单个 Frame 运行协议预检 */
 export function preflightFrame(
@@ -183,22 +151,9 @@ export function preflightFrame(
       });
     }
 
-    // 7. Safe Area 遮挡禁区预警
-    const safeHits = detectSafeAreaCollisions(g);
-    if (safeHits.length > 0) {
-      issues.push({
-        id: nextId(),
-        severity: "warn",
-        code: "SAFE_AREA_COLLISION",
-        message: `图元「${g.displayName}」落入官方客户端遮挡区`,
-        detail: `碰撞区域：${safeHits.join("、")}`,
-        frameId: frame.id,
-        graphicId: g.id,
-      });
-    }
   }
 
-  // 8. Group 名称与分包预算检查
+  // 7. Group 名称与分包预算检查
   for (const grp of frame.groups) {
     if (!grp.name.trim()) {
       issues.push({

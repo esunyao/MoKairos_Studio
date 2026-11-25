@@ -112,16 +112,16 @@ describe("2027 裁判系统协议校验、分包与封帧", () => {
     }
   });
 
-  it("落入官方遮挡禁区的图元应触发 Safe Area 警告", () => {
+  it("超出 1920×1080 画板可视区域的图元应触发 OUT_OF_VIEWPORT 警告", () => {
     const frame: MkuiFrame = {
-      id: "f_safe",
+      id: "f_viewport",
       name: "Main",
       groups: [{ id: "g1", name: "G", visible: true, locked: false, collapsed: false }],
       graphics: [
         {
           id: "bad1",
           figureName: "b01",
-          displayName: "遮挡小地图框",
+          displayName: "超界正圆",
           groupId: "g1",
           layer: 0,
           color: 1,
@@ -129,16 +129,15 @@ describe("2027 裁判系统协议校验、分包与封帧", () => {
           dynamic: false,
           visible: true,
           locked: false,
-          kind: "rect",
-          startX: 1500,
-          startY: 50,
-          endX: 1700,
-          endY: 200,
+          kind: "circle",
+          centerX: 1900,
+          centerY: 100,
+          radius: 80,
         },
       ],
     };
     const issues = preflightFrame(frame, "infantry_3");
-    expect(issues.some((i) => i.severity === "warn" && i.code === "SAFE_AREA_COLLISION")).toBe(
+    expect(issues.some((i) => i.severity === "warn" && i.code === "OUT_OF_VIEWPORT")).toBe(
       true,
     );
   });

@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { computeDocumentDiff } from "@/domain/versioning/diffEngine";
+import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/Button";
 import { Badge, Input } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
@@ -27,7 +28,6 @@ export function VersionDrawer() {
   const open = useAppStore((s) => s.versionDrawerOpen);
   const setOpen = useAppStore((s) => s.setVersionDrawerOpen);
   const authorName = useAppStore((s) => s.authorName);
-  const pushToast = useAppStore((s) => s.pushToast);
 
   const doc = useDocumentStore((s) => s.doc);
   const replaceDocumentFromVersion = useDocumentStore(
@@ -71,17 +71,13 @@ export function VersionDrawer() {
       });
       setMessage("");
       setVersionTag("");
-      pushToast({
-        tone: "success",
-        title: "已提交版本快照",
+      toast.success("已提交版本快照", {
         description: filePath
           ? "快照已写入 .mkui 压缩包 history/"
           : "草稿快照已暂存，保存 .mkui 时将一并打包",
       });
     } catch (err) {
-      pushToast({
-        tone: "error",
-        title: "提交版本失败",
+      toast.error("提交版本失败", {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -99,15 +95,11 @@ export function VersionDrawer() {
       }
       const targetDoc = await loadSnapshotDoc(filePath, commitId);
       replaceDocumentFromVersion(targetDoc);
-      pushToast({
-        tone: "success",
-        title: "已回滚到选定版本",
+      toast.success("已回滚到选定版本", {
         description: "你仍可使用撤销 (Ctrl+Z) 返回刚才的工作状态",
       });
     } catch (err) {
-      pushToast({
-        tone: "error",
-        title: "回滚版本失败",
+      toast.error("回滚版本失败", {
         description: err instanceof Error ? err.message : String(err),
       });
     }
@@ -117,16 +109,12 @@ export function VersionDrawer() {
     try {
       const saved = await exportSnapshotAsMkui(filePath, commitId, doc.name);
       if (saved) {
-        pushToast({
-          tone: "success",
-          title: "已导出历史版本 .mkui",
+        toast.success("已导出历史版本 .mkui", {
           description: saved,
         });
       }
     } catch (err) {
-      pushToast({
-        tone: "error",
-        title: "导出历史版本失败",
+      toast.error("导出历史版本失败", {
         description: err instanceof Error ? err.message : String(err),
       });
     }

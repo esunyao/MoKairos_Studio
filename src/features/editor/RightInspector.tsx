@@ -126,7 +126,7 @@ export function RightInspector({
 
               {issues.length === 0 ? (
                 <div className="rounded-[var(--mk-radius-md)] border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-surface)] p-3 text-[11px] text-[var(--mk-text-secondary)]">
-                  当前画面所有图元均符合 2027 裁判系统协议，且未侵入官方客户端遮挡禁区。
+                  当前画面所有图元均符合 2027 裁判系统协议，且全部处于 1920×1080 可视范围内。
                 </div>
               ) : (
                 <div className="space-y-1.5">

@@ -18,7 +18,7 @@ import { useDocumentStore } from "@/stores/useDocumentStore";
 
 /**
  * 远左 44px 绘图工具条：选择、抓手与裁判系统 8 类基本图元
- * 点击切换绘制模式，双击图元工具直接在画布安全区中心快速插入
+ * 点击切换绘制模式，双击图元工具直接在 1920×1080 画布中心快速插入
  */
 
 const TOOL_ITEMS: ReadonlyArray<{

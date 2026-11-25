@@ -9,6 +9,7 @@ import {
   LocateFixed,
   PackageCheck,
 } from "lucide-react";
+import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogContent } from "@/components/ui/Dialog";
 import { Badge, Input } from "@/components/ui/Primitives";
@@ -124,7 +125,6 @@ export function ExportMockView() {
   const doc = useDocumentStore((s) => s.doc);
   const setActiveFrame = useDocumentStore((s) => s.setActiveFrame);
   const setView = useAppStore((s) => s.setView);
-  const pushToast = useAppStore((s) => s.pushToast);
   const setSelectedIds = useCanvasStore((s) => s.setSelectedIds);
   const filePath = useProjectStore((s) => s.filePath);
   const lastArchiveBytes = useProjectStore((s) => s.lastArchiveBytes);
@@ -467,9 +467,7 @@ export function ExportMockView() {
               className="w-full border border-dashed border-[var(--mk-border-strong)]"
               onClick={() => {
                 if (errorCount > 0) {
-                  pushToast({
-                    tone: "error",
-                    title: "预检存在阻断错误",
+                  toast.error("预检存在阻断错误", {
                     description: `请先修复 ${errorCount} 个协议错误后再执行交付演示`,
                   });
                   return;

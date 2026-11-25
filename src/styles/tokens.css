@@ -68,10 +68,6 @@
   --rm-proto-6-cyan: #00e5ff;
   --rm-proto-7-black: #000000;
   --rm-proto-8-white: #ffffff;
-
-  /* --- 官方遮挡禁区叠加层（仅设计辅助，绝不导出） --- */
-  --mk-safezone-danger-fill: rgba(239, 68, 68, 0.18);
-  --mk-safezone-danger-stroke: rgba(239, 68, 68, 0.85);
 }
 
 /* --- App Shell 浅色适配（Light Precision Engineering Theme） --- */

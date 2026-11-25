@@ -16,7 +16,6 @@ interface CanvasState {
   isolatedLayer: LayerIndex | null;
   previewTeam: "red" | "blue";
   showGrid: boolean;
-  showSafeArea: boolean;
   showBackground: boolean;
   backgroundOpacity: number;
   customBackgroundUrl: string | null;
@@ -34,7 +33,6 @@ interface CanvasState {
   isolateLayer: (layer: LayerIndex | null) => void;
   setPreviewTeam: (team: "red" | "blue") => void;
   toggleGrid: () => void;
-  toggleSafeArea: () => void;
   toggleBackground: () => void;
   setBackgroundOpacity: (opacity: number) => void;
   setCustomBackgroundUrl: (url: string | null) => void;
@@ -63,7 +61,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   isolatedLayer: null,
   previewTeam: "red",
   showGrid: true,
-  showSafeArea: true,
   showBackground: true,
   backgroundOpacity: 0.9,
   customBackgroundUrl: null,
@@ -109,7 +106,6 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   setPreviewTeam: (previewTeam) => set({ previewTeam }),
   toggleGrid: () => set((s) => ({ showGrid: !s.showGrid })),
-  toggleSafeArea: () => set((s) => ({ showSafeArea: !s.showSafeArea })),
   toggleBackground: () => set((s) => ({ showBackground: !s.showBackground })),
   setBackgroundOpacity: (backgroundOpacity) => set({ backgroundOpacity }),
   setCustomBackgroundUrl: (customBackgroundUrl) => set({ customBackgroundUrl }),
