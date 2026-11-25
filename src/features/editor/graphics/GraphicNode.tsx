@@ -1,9 +1,14 @@
+import { useEffect, useRef, useState } from "react";
 import { Circle, Ellipse, Group, Line, Rect, Shape, Text } from "react-konva";
 import type Konva from "konva";
-import { getProtocolColorHex } from "@/domain/protocol/constants";
+import {
+  RM_CANVAS_WIDTH,
+  getProtocolColorHex,
+} from "@/domain/protocol/constants";
 import {
   canvasOffsetToRmAngle,
   canvasYToRmY,
+  clampInt,
   normalizeGraphic,
   rmAngleToCanvasOffset,
   rmArcToCanvasRadians,
@@ -18,7 +23,7 @@ import type { TelemetryOverride } from "@/stores/useSimulatorStore";
  * 严格红线：
  * 1. 所有坐标从 RM 左下角原点通过 geometry.ts 映射到 Canvas 左上角原点；
  * 2. 画布内部严禁使用渐变、发光、模糊、阴影与圆角；
- * 3. 椭圆弧使用 ctx.ellipse 自定义绘制；直线与圆弧在选中态提供专属端点/角度拖拽柄。
+ * 3. 椭圆弧使用 ctx.ellipse 自定义绘制；直线与圆弧在选中态提供实时预览、几何吸附的端点/角度拖拽柄。
  */
 
 interface GraphicNodeProps {
@@ -32,6 +37,22 @@ interface GraphicNodeProps {
   onCommitChange: (id: string, patch: Partial<MkuiGraphic>) => void;
 }
 
+interface DraftArcState {
+  startAngle?: number;
+  endAngle?: number;
+  dx?: number;
+  dy?: number;
+}
+
+interface DraftLineState {
+  startX?: number;
+  startY?: number;
+  endX?: number;
+  endY?: number;
+  dx?: number;
+  dy?: number;
+}
+
 export function GraphicNode({
   graphic,
   team,
@@ -42,12 +63,39 @@ export function GraphicNode({
   onSelect,
   onCommitChange,
 }: GraphicNodeProps) {
+  const arcShapeRef = useRef<Konva.Shape | null>(null);
+  const [draftArc, setDraftArc] = useState<DraftArcState | null>(null);
+  const [draftLine, setDraftLine] = useState<DraftLineState | null>(null);
+  const [isTransforming, setIsTransforming] = useState(false);
+
+  // 切换图元或取消选中/不可编辑时清理瞬态拖拽状态
+  useEffect(() => {
+    setDraftArc(null);
+    setDraftLine(null);
+    setIsTransforming(false);
+  }, [graphic.id, editable]);
+
+  const effectiveColorId = simOverride?.color ?? graphic.color;
+  const strokeHex = getProtocolColorHex(effectiveColorId, team);
+
+  // Konva 自定义 <Shape> 在仅更新 sceneFunc 闭包（例如属性栏改角度、拖拽角度柄）时必须主动触发重绘
+  const arcRedrawSig =
+    graphic.kind === "arc"
+      ? `${draftArc?.startAngle ?? simOverride?.startAngle ?? graphic.startAngle}|${
+          draftArc?.endAngle ?? simOverride?.endAngle ?? graphic.endAngle
+        }|${graphic.rx}|${graphic.ry}|${graphic.centerX}|${graphic.centerY}|${strokeHex}|${graphic.lineWidth}`
+      : "";
+
+  useEffect(() => {
+    if (graphic.kind === "arc") {
+      arcShapeRef.current?.getLayer()?.batchDraw();
+    }
+  }, [graphic.kind, arcRedrawSig]);
+
   if (simOverride?.visible === false) {
     return null;
   }
 
-  const effectiveColorId = simOverride?.color ?? graphic.color;
-  const strokeHex = getProtocolColorHex(effectiveColorId, team);
   const canInteract = editable && !graphic.locked;
 
   const handleSelect = (e: Konva.KonvaEventObject<MouseEvent | TouchEvent>) => {
@@ -69,12 +117,14 @@ export function GraphicNode({
 
   switch (graphic.kind) {
     case "line": {
-      const endX = simOverride?.endX ?? graphic.endX;
-      const endY = simOverride?.endY ?? graphic.endY;
-      const x1 = graphic.startX;
-      const y1 = rmYToCanvasY(graphic.startY);
-      const x2 = endX;
-      const y2 = rmYToCanvasY(endY);
+      const baseEndX = simOverride?.endX ?? graphic.endX;
+      const baseEndY = simOverride?.endY ?? graphic.endY;
+      const x1 = draftLine?.startX ?? graphic.startX;
+      const y1 = rmYToCanvasY(draftLine?.startY ?? graphic.startY);
+      const x2 = draftLine?.endX ?? baseEndX;
+      const y2 = rmYToCanvasY(draftLine?.endY ?? baseEndY);
+      const bodyDx = draftLine?.dx ?? 0;
+      const bodyDy = draftLine?.dy ?? 0;
 
       return (
         <Group>
@@ -89,13 +139,22 @@ export function GraphicNode({
             draggable={canInteract}
             onMouseDown={handleSelect}
             onTap={handleSelect}
-            onDragEnd={handleDragEndOffset}
+            onDragMove={(e) => {
+              setDraftLine({
+                dx: Math.round(e.target.x()),
+                dy: Math.round(e.target.y()),
+              });
+            }}
+            onDragEnd={(e) => {
+              setDraftLine(null);
+              handleDragEndOffset(e);
+            }}
           />
           {canInteract && isSelected && (
             <>
               <Circle
-                x={x1}
-                y={y1}
+                x={x1 + bodyDx}
+                y={y1 + bodyDy}
                 radius={6}
                 fill="#00d4ff"
                 stroke="#0d1117"
@@ -104,15 +163,23 @@ export function GraphicNode({
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
                 }}
-                onDragEnd={(e) => {
-                  const nx = Math.round(e.target.x());
+                onDragMove={(e) => {
+                  const nx = clampInt(e.target.x(), 0, RM_CANVAS_WIDTH);
                   const ny = canvasYToRmY(e.target.y());
+                  e.target.position({ x: nx, y: rmYToCanvasY(ny) });
+                  setDraftLine({ startX: nx, startY: ny });
+                }}
+                onDragEnd={(e) => {
+                  const nx = clampInt(e.target.x(), 0, RM_CANVAS_WIDTH);
+                  const ny = canvasYToRmY(e.target.y());
+                  e.target.position({ x: nx, y: rmYToCanvasY(ny) });
+                  setDraftLine(null);
                   onCommitChange(graphic.id, { startX: nx, startY: ny });
                 }}
               />
               <Circle
-                x={x2}
-                y={y2}
+                x={x2 + bodyDx}
+                y={y2 + bodyDy}
                 radius={6}
                 fill="#00d4ff"
                 stroke="#0d1117"
@@ -121,9 +188,17 @@ export function GraphicNode({
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
                 }}
-                onDragEnd={(e) => {
-                  const nx = Math.round(e.target.x());
+                onDragMove={(e) => {
+                  const nx = clampInt(e.target.x(), 0, RM_CANVAS_WIDTH);
                   const ny = canvasYToRmY(e.target.y());
+                  e.target.position({ x: nx, y: rmYToCanvasY(ny) });
+                  setDraftLine({ endX: nx, endY: ny });
+                }}
+                onDragEnd={(e) => {
+                  const nx = clampInt(e.target.x(), 0, RM_CANVAS_WIDTH);
+                  const ny = canvasYToRmY(e.target.y());
+                  e.target.position({ x: nx, y: rmYToCanvasY(ny) });
+                  setDraftLine(null);
                   onCommitChange(graphic.id, { endX: nx, endY: ny });
                 }}
               />
@@ -226,7 +301,10 @@ export function GraphicNode({
           }}
           onTransformEnd={(e) => {
             const node = e.target;
-            const scale = Math.max(Math.abs(node.scaleX()), Math.abs(node.scaleY()));
+            const scale = Math.max(
+              Math.abs(node.scaleX()),
+              Math.abs(node.scaleY()),
+            );
             const nextRadius = Math.max(1, Math.round(graphic.radius * scale));
             node.scaleX(1);
             node.scaleY(1);
@@ -265,8 +343,14 @@ export function GraphicNode({
           }}
           onTransformEnd={(e) => {
             const node = e.target;
-            const nextRx = Math.max(1, Math.round(graphic.rx * Math.abs(node.scaleX())));
-            const nextRy = Math.max(1, Math.round(graphic.ry * Math.abs(node.scaleY())));
+            const nextRx = Math.max(
+              1,
+              Math.round(graphic.rx * Math.abs(node.scaleX())),
+            );
+            const nextRy = Math.max(
+              1,
+              Math.round(graphic.ry * Math.abs(node.scaleY())),
+            );
             node.scaleX(1);
             node.scaleY(1);
             onCommitChange(graphic.id, {
@@ -282,23 +366,34 @@ export function GraphicNode({
 
     case "arc": {
       const cyCanvas = rmYToCanvasY(graphic.centerY);
-      const startAngle = simOverride?.startAngle ?? graphic.startAngle;
-      const endAngle = simOverride?.endAngle ?? graphic.endAngle;
+      const bodyDx = draftArc?.dx ?? 0;
+      const bodyDy = draftArc?.dy ?? 0;
+      const startAngle =
+        draftArc?.startAngle ?? simOverride?.startAngle ?? graphic.startAngle;
+      const endAngle =
+        draftArc?.endAngle ?? simOverride?.endAngle ?? graphic.endAngle;
       const { startRad, endRad } = rmArcToCanvasRadians(startAngle, endAngle);
-      const startOffset = rmAngleToCanvasOffset(startAngle, graphic.rx, graphic.ry);
+      const startOffset = rmAngleToCanvasOffset(
+        startAngle,
+        graphic.rx,
+        graphic.ry,
+      );
       const endOffset = rmAngleToCanvasOffset(endAngle, graphic.rx, graphic.ry);
 
       return (
         <Group>
           <Shape
-            ref={(n) => registerNodeRef?.(graphic.id, n)}
+            ref={(n) => {
+              arcShapeRef.current = n;
+              registerNodeRef?.(graphic.id, n);
+            }}
             id={graphic.id}
             x={graphic.centerX}
             y={cyCanvas}
             width={graphic.rx * 2}
             height={graphic.ry * 2}
-            offsetX={0}
-            offsetY={0}
+            offsetX={graphic.rx}
+            offsetY={graphic.ry}
             stroke={strokeHex}
             strokeWidth={graphic.lineWidth}
             draggable={canInteract}
@@ -306,28 +401,61 @@ export function GraphicNode({
             onTap={handleSelect}
             sceneFunc={(ctx, shape) => {
               ctx.beginPath();
-              ctx.ellipse(0, 0, graphic.rx, graphic.ry, 0, startRad, endRad, false);
+              ctx.ellipse(
+                graphic.rx,
+                graphic.ry,
+                graphic.rx,
+                graphic.ry,
+                0,
+                startRad,
+                endRad,
+                false,
+              );
               ctx.strokeShape(shape);
             }}
             hitFunc={(ctx, shape) => {
               ctx.beginPath();
-              ctx.ellipse(0, 0, graphic.rx, graphic.ry, 0, startRad, endRad, false);
+              ctx.ellipse(
+                graphic.rx,
+                graphic.ry,
+                graphic.rx,
+                graphic.ry,
+                0,
+                startRad,
+                endRad,
+                false,
+              );
               ctx.lineWidth = Math.max(16, graphic.lineWidth + 10);
               ctx.strokeShape(shape);
             }}
+            onDragMove={(e) => {
+              setDraftArc({
+                dx: Math.round(e.target.x() - graphic.centerX),
+                dy: Math.round(e.target.y() - cyCanvas),
+              });
+            }}
             onDragEnd={(e) => {
               const node = e.target;
+              setDraftArc(null);
               onCommitChange(graphic.id, {
                 centerX: Math.round(node.x()),
                 centerY: canvasYToRmY(node.y()),
               });
             }}
+            onTransformStart={() => setIsTransforming(true)}
             onTransformEnd={(e) => {
               const node = e.target;
-              const nextRx = Math.max(1, Math.round(graphic.rx * Math.abs(node.scaleX())));
-              const nextRy = Math.max(1, Math.round(graphic.ry * Math.abs(node.scaleY())));
+              const nextRx = Math.max(
+                1,
+                Math.round(graphic.rx * Math.abs(node.scaleX())),
+              );
+              const nextRy = Math.max(
+                1,
+                Math.round(graphic.ry * Math.abs(node.scaleY())),
+              );
               node.scaleX(1);
               node.scaleY(1);
+              setIsTransforming(false);
               onCommitChange(graphic.id, {
                 centerX: Math.round(node.x()),
                 centerY: canvasYToRmY(node.y()),
@@ -336,11 +464,11 @@ export function GraphicNode({
               });
             }}
           />
-          {canInteract && isSelected && (
+          {canInteract && isSelected && !isTransforming && (
             <>
               <Circle
-                x={graphic.centerX + startOffset.dx}
-                y={cyCanvas + startOffset.dy}
+                x={graphic.centerX + bodyDx + startOffset.dx}
+                y={cyCanvas + bodyDy + startOffset.dy}
                 radius={6}
                 fill="#ffd60a"
                 stroke="#0d1117"
@@ -349,16 +477,51 @@ export function GraphicNode({
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
                 }}
+                onDragMove={(e) => {
+                  const dx = e.target.x() - graphic.centerX;
+                  const dy = e.target.y() - cyCanvas;
+                  const nextAngle = canvasOffsetToRmAngle(
+                    dx,
+                    dy,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  const snapped = rmAngleToCanvasOffset(
+                    nextAngle,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  e.target.position({
+                    x: graphic.centerX + snapped.dx,
+                    y: cyCanvas + snapped.dy,
+                  });
+                  setDraftArc({ startAngle: nextAngle });
+                }}
                 onDragEnd={(e) => {
                   const dx = e.target.x() - graphic.centerX;
                   const dy = e.target.y() - cyCanvas;
-                  const nextAngle = canvasOffsetToRmAngle(dx, dy, graphic.rx, graphic.ry);
+                  const nextAngle = canvasOffsetToRmAngle(
+                    dx,
+                    dy,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  const snapped = rmAngleToCanvasOffset(
+                    nextAngle,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  e.target.position({
+                    x: graphic.centerX + snapped.dx,
+                    y: cyCanvas + snapped.dy,
+                  });
+                  setDraftArc(null);
                   onCommitChange(graphic.id, { startAngle: nextAngle });
                 }}
               />
               <Circle
-                x={graphic.centerX + endOffset.dx}
-                y={cyCanvas + endOffset.dy}
+                x={graphic.centerX + bodyDx + endOffset.dx}
+                y={cyCanvas + bodyDy + endOffset.dy}
                 radius={6}
                 fill="#00d4ff"
                 stroke="#0d1117"
@@ -367,10 +530,45 @@ export function GraphicNode({
                 onMouseDown={(e) => {
                   e.cancelBubble = true;
                 }}
+                onDragMove={(e) => {
+                  const dx = e.target.x() - graphic.centerX;
+                  const dy = e.target.y() - cyCanvas;
+                  const nextAngle = canvasOffsetToRmAngle(
+                    dx,
+                    dy,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  const snapped = rmAngleToCanvasOffset(
+                    nextAngle,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  e.target.position({
+                    x: graphic.centerX + snapped.dx,
+                    y: cyCanvas + snapped.dy,
+                  });
+                  setDraftArc({ endAngle: nextAngle });
+                }}
                 onDragEnd={(e) => {
                   const dx = e.target.x() - graphic.centerX;
                   const dy = e.target.y() - cyCanvas;
-                  const nextAngle = canvasOffsetToRmAngle(dx, dy, graphic.rx, graphic.ry);
+                  const nextAngle = canvasOffsetToRmAngle(
+                    dx,
+                    dy,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  const snapped = rmAngleToCanvasOffset(
+                    nextAngle,
+                    graphic.rx,
+                    graphic.ry,
+                  );
+                  e.target.position({
+                    x: graphic.centerX + snapped.dx,
+                    y: cyCanvas + snapped.dy,
+                  });
+                  setDraftArc(null);
                   onCommitChange(graphic.id, { endAngle: nextAngle });
                 }}
               />
