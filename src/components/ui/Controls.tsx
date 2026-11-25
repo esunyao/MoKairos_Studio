@@ -4,6 +4,7 @@ import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { Check, ChevronDown } from "lucide-react";
+import { LiquidGlassSurface } from "./liquid-glass";
 import { cn } from "./cn";
 
 /**
@@ -84,22 +85,29 @@ export function SimpleSelect({
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}
-          className="mk-glass-elevated z-[70] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[var(--mk-radius-md)] p-1 text-xs text-[var(--mk-text-primary)]"
+          className="z-[70] min-w-[var(--radix-select-trigger-width)] focus:outline-none"
         >
-          <SelectPrimitive.Viewport>
-            {options.map((opt) => (
-              <SelectPrimitive.Item
-                key={opt.value}
-                value={opt.value}
-                className="relative flex cursor-pointer items-center justify-between rounded-[var(--mk-radius-sm)] px-2.5 py-1.5 outline-none data-[highlighted]:bg-[var(--mk-accent-primary-tint)] data-[highlighted]:text-[var(--mk-accent-primary)]"
-              >
-                <SelectPrimitive.ItemText>{opt.label}</SelectPrimitive.ItemText>
-                <SelectPrimitive.ItemIndicator>
-                  <Check className="h-3.5 w-3.5" />
-                </SelectPrimitive.ItemIndicator>
-              </SelectPrimitive.Item>
-            ))}
-          </SelectPrimitive.Viewport>
+          <LiquidGlassSurface
+            cornerRadius={10}
+            elastic={false}
+            lightweight={true}
+            contentClassName="p-1 text-xs text-[var(--mk-text-primary)]"
+          >
+            <SelectPrimitive.Viewport>
+              {options.map((opt) => (
+                <SelectPrimitive.Item
+                  key={opt.value}
+                  value={opt.value}
+                  className="relative flex cursor-pointer items-center justify-between rounded-[var(--mk-radius-sm)] px-2.5 py-1.5 outline-none data-[highlighted]:bg-[var(--mk-accent-primary-tint)] data-[highlighted]:text-[var(--mk-accent-primary)]"
+                >
+                  <SelectPrimitive.ItemText>{opt.label}</SelectPrimitive.ItemText>
+                  <SelectPrimitive.ItemIndicator>
+                    <Check className="h-3.5 w-3.5" />
+                  </SelectPrimitive.ItemIndicator>
+                </SelectPrimitive.Item>
+              ))}
+            </SelectPrimitive.Viewport>
+          </LiquidGlassSurface>
         </SelectPrimitive.Content>
       </SelectPrimitive.Portal>
     </SelectPrimitive.Root>
@@ -124,9 +132,16 @@ export function Tooltip({
         <TooltipPrimitive.Content
           side={side}
           sideOffset={6}
-          className="mk-glass-elevated z-[80] rounded-[var(--mk-radius-sm)] px-2.5 py-1 text-[11px] text-[var(--mk-text-primary)]"
+          className="z-[80]"
         >
-          {content}
+          <LiquidGlassSurface
+            cornerRadius={6}
+            elastic={false}
+            lightweight={true}
+            contentClassName="px-2.5 py-1 text-[11px] text-[var(--mk-text-primary)]"
+          >
+            {content}
+          </LiquidGlassSurface>
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>

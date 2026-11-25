@@ -50,12 +50,18 @@
 
   --mk-dot-grid: rgba(148, 163, 184, 0.16);
 
-  /* --- 外壳玻璃质感变量（严禁用于画布内部图元） --- */
+  /* --- 外壳玻璃质感与普通非液态质感变量（严禁用于画布内部图元） --- */
   --mk-glass-bg: rgba(18, 24, 34, 0.72);
   --mk-glass-elevated-bg: rgba(20, 27, 39, 0.84);
   --mk-glass-border: rgba(148, 163, 184, 0.16);
   --mk-glass-highlight: rgba(255, 255, 255, 0.06);
   --mk-glass-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --mk-surface-std-bg: #161d28;
+  --mk-surface-std-elevated-bg: #1c2432;
+  --mk-surface-std-border: #2c384e;
+  --mk-surface-std-shadow: 0 10px 28px rgba(0, 0, 0, 0.42);
+  --mk-modal-overlay-bg: rgba(0, 0, 0, 0.52);
+  --mk-drawer-overlay-bg: rgba(0, 0, 0, 0.4);
 
   /* --- RoboMaster 裁判系统协议 9 色只读常量（严禁任意 HEX 混入画布） --- */
   --rm-proto-0-main-red: #ff3b30;
@@ -106,4 +112,10 @@
   --mk-glass-border: rgba(15, 23, 42, 0.1);
   --mk-glass-highlight: rgba(255, 255, 255, 0.7);
   --mk-glass-shadow: 0 12px 32px rgba(15, 23, 42, 0.1);
+  --mk-surface-std-bg: #ffffff;
+  --mk-surface-std-elevated-bg: #ffffff;
+  --mk-surface-std-border: #cbd5e1;
+  --mk-surface-std-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+  --mk-modal-overlay-bg: rgba(226, 232, 240, 0.42);
+  --mk-drawer-overlay-bg: rgba(226, 232, 240, 0.34);
 }

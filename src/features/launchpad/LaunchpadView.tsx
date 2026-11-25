@@ -165,7 +165,7 @@ export function LaunchpadView() {
       </aside>
 
       {/* 右侧主内容区 */}
-      <main className="min-w-0 flex-1 overflow-y-auto p-6">
+      <main className="mk-launchpad-liquid-ambient min-w-0 flex-1 overflow-y-auto p-6">
         <div className="mx-auto max-w-6xl space-y-6">
           {/* 搜索栏 */}
           <div className="flex flex-wrap items-center justify-between gap-3">

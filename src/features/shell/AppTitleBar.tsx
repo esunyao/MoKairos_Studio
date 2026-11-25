@@ -1,9 +1,11 @@
 import { motion } from "motion/react";
 import {
   Cpu,
+  Droplets,
   GitBranch,
   Home,
   Keyboard,
+  Layers,
   Moon,
   Radio,
   Redo2,
@@ -17,6 +19,7 @@ import { TeamToggle } from "@/components/protocol/TeamToggle";
 import { Button } from "@/components/ui/Button";
 import { SimpleSelect, Tooltip } from "@/components/ui/Controls";
 import { cn } from "@/components/ui/cn";
+import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
 import { saveCurrentProject } from "@/services/projectActions";
 import { navigateToLaunchpadWithGuard } from "@/services/unsavedGuard";
 import { useAppStore, type WorkspaceView } from "@/stores/useAppStore";
@@ -45,6 +48,8 @@ export function AppTitleBar() {
   const setView = useAppStore((s) => s.setView);
   const theme = useAppStore((s) => s.theme);
   const toggleTheme = useAppStore((s) => s.toggleTheme);
+  const surfaceStyle = useAppStore((s) => s.surfaceStyle);
+  const toggleSurfaceStyle = useAppStore((s) => s.toggleSurfaceStyle);
   const setVersionDrawerOpen = useAppStore((s) => s.setVersionDrawerOpen);
   const versionDrawerOpen = useAppStore((s) => s.versionDrawerOpen);
   const setSettingsModalOpen = useAppStore((s) => s.setSettingsModalOpen);
@@ -66,8 +71,15 @@ export function AppTitleBar() {
   const commitCount = useVersionStore((s) => s.index.commits.length);
 
   return (
-    <header className="mk-glass mk-theme-transition relative z-30 flex h-[var(--mk-topbar-height)] shrink-0 items-center justify-between border-b px-3">
-      {/* 左侧：品牌 + 带守卫的返回大厅 + 工程/画面选择 */}
+    <header className="relative z-30 h-[var(--mk-topbar-height)] shrink-0">
+      <LiquidGlassSurface
+        variant="bar"
+        cornerRadius={0}
+        elastic={false}
+        className="h-full w-full border-b"
+        contentClassName="flex h-full w-full items-center justify-between px-3"
+      >
+        {/* 左侧：品牌 + 带守卫的返回大厅 + 工程/画面选择 */}
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
@@ -247,6 +259,27 @@ export function AppTitleBar() {
           </Button>
         </Tooltip>
 
+        <Tooltip
+          content={
+            surfaceStyle === "liquid"
+              ? "当前：液态玻璃质感（点击切换为普通质感）"
+              : "当前：普通非液态质感（点击切换为液态玻璃）"
+          }
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleSurfaceStyle}
+            aria-label="切换液态玻璃质感"
+          >
+            {surfaceStyle === "liquid" ? (
+              <Droplets className="h-3.5 w-3.5 text-[var(--mk-accent-primary)]" />
+            ) : (
+              <Layers className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </Tooltip>
+
         <Tooltip content={theme === "dark" ? "切换到浅色模式" : "切换到暗色模式"}>
           <Button
             variant="ghost"
@@ -273,6 +306,7 @@ export function AppTitleBar() {
           </Button>
         </Tooltip>
       </div>
+      </LiquidGlassSurface>
     </header>
   );
 }

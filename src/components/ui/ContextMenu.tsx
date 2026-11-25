@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { ChevronRight } from "lucide-react";
+import { LiquidGlassSurface } from "./liquid-glass";
 import { cn } from "./cn";
 
 /**
@@ -97,8 +98,10 @@ function MenuPanel({
             </button>
 
             {subOpen && entry.children && (
-              <div className="mk-glass-elevated absolute top-0 left-full ml-1 rounded-[var(--mk-radius-md)]">
-                <MenuPanel items={entry.children} onClose={onClose} />
+              <div className="absolute top-0 left-full ml-1">
+                <LiquidGlassSurface cornerRadius={12} elastic={false}>
+                  <MenuPanel items={entry.children} onClose={onClose} />
+                </LiquidGlassSurface>
               </div>
             )}
           </div>
@@ -176,9 +179,11 @@ export function ContextMenu({
             exit={{ opacity: 0, scale: 0.96, y: -4 }}
             transition={{ duration: 0.12 }}
             style={{ left: pos.left, top: pos.top }}
-            className="mk-glass-elevated fixed rounded-[var(--mk-radius-md)]"
+            className="fixed"
           >
-            <MenuPanel items={state.items} onClose={onClose} />
+            <LiquidGlassSurface cornerRadius={12} elastic={false}>
+              <MenuPanel items={state.items} onClose={onClose} />
+            </LiquidGlassSurface>
           </motion.div>
         </div>
       )}

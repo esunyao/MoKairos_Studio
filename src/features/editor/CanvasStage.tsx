@@ -33,6 +33,7 @@ import {
   type ContextMenuEntry,
   type ContextMenuState,
 } from "@/components/ui/ContextMenu";
+import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
 import {
   GRAPHIC_KIND_METAS,
   RM_CANVAS_HEIGHT,
@@ -774,52 +775,59 @@ export function CanvasStage({
         </Layer>
       </Stage>
 
-      {/* 底部玻璃质感视口控制胶囊条 */}
-      <div className="mk-glass-elevated absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-0.5 overflow-x-auto whitespace-nowrap rounded-full px-2.5 py-1 text-[11px]">
-        <button
-          type="button"
-          onClick={handleFit}
-          className="shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-secondary)] hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
+      {/* 底部液态玻璃 / 普通质感视口控制胶囊条 */}
+      <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 max-w-[calc(100%-24px)] -translate-x-1/2">
+        <LiquidGlassSurface
+          cornerRadius={999}
+          elastic={true}
+          className="pointer-events-auto"
+          contentClassName="flex items-center gap-0.5 overflow-x-auto whitespace-nowrap px-2.5 py-1 text-[11px]"
         >
-          适应视口
-        </button>
-        <button
-          type="button"
-          onClick={handleZoom100}
-          className="mk-tabular shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-primary)] hover:bg-[var(--mk-bg-surface-hover)] cursor-pointer"
-          title="点击重置为 100%"
-        >
-          {Math.round(scale * 100)}%
-        </button>
-        <span className="h-3.5 w-px shrink-0 bg-[var(--mk-border-subtle)]" />
-        <button
-          type="button"
-          onClick={toggleGrid}
-          className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-            showGrid
-              ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
-              : "text-[var(--mk-text-muted)]"
-          }`}
-          title="切换点阵网格显示 (G)"
-        >
-          点阵
-        </button>
-        <button
-          type="button"
-          onClick={toggleBackground}
-          className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
-            showBackground
-              ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
-              : "text-[var(--mk-text-muted)]"
-          }`}
-          title="切换官方客户端底图显示 (B)"
-        >
-          底图
-        </button>
-        <span className="h-3.5 w-px shrink-0 bg-[var(--mk-border-subtle)]" />
-        <span className="mk-tabular shrink-0 px-1.5 text-[var(--mk-text-secondary)]">
-          RM ({cursorRm ? `${cursorRm.x}, ${cursorRm.y}` : "—, —"})
-        </span>
+          <button
+            type="button"
+            onClick={handleFit}
+            className="shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-secondary)] hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
+          >
+            适应视口
+          </button>
+          <button
+            type="button"
+            onClick={handleZoom100}
+            className="mk-tabular shrink-0 rounded-full px-2 py-0.5 font-medium text-[var(--mk-text-primary)] hover:bg-[var(--mk-bg-surface-hover)] cursor-pointer"
+            title="点击重置为 100%"
+          >
+            {Math.round(scale * 100)}%
+          </button>
+          <span className="h-3.5 w-px shrink-0 bg-[var(--mk-border-subtle)]" />
+          <button
+            type="button"
+            onClick={toggleGrid}
+            className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
+              showGrid
+                ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
+                : "text-[var(--mk-text-muted)]"
+            }`}
+            title="切换点阵网格显示 (G)"
+          >
+            点阵
+          </button>
+          <button
+            type="button"
+            onClick={toggleBackground}
+            className={`shrink-0 rounded-full px-2 py-0.5 font-medium transition-colors cursor-pointer ${
+              showBackground
+                ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
+                : "text-[var(--mk-text-muted)]"
+            }`}
+            title="切换官方客户端底图显示 (B)"
+          >
+            底图
+          </button>
+          <span className="h-3.5 w-px shrink-0 bg-[var(--mk-border-subtle)]" />
+          <span className="mk-tabular shrink-0 px-1.5 text-[var(--mk-text-secondary)]">
+            RM ({cursorRm ? `${cursorRm.x}, ${cursorRm.y}` : "—, —"})
+          </span>
+        </LiquidGlassSurface>
       </div>
 
       {/* 自定义右键菜单 */}

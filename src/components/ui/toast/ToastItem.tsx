@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from "lucide-react";
+import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
 import type { ToastRecord, ToastTone } from "./toastStore";
 
 /**
@@ -72,52 +73,58 @@ export function ToastItem({
       transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="mk-glass-elevated pointer-events-auto relative overflow-hidden rounded-[var(--mk-radius-md)] p-3 pl-3.5 text-xs"
+      className="pointer-events-auto"
     >
-      <span
-        className={`absolute top-2 bottom-2 left-1 w-[3px] rounded-full ${meta.barClass}`}
-      />
-      <div className="flex items-start gap-2.5">
-        <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${meta.iconClass}`} />
-        <div className="min-w-0 flex-1">
-          <div className="font-medium text-[var(--mk-text-primary)]">
-            {item.title}
-          </div>
-          {item.description && (
-            <div className="mt-0.5 break-all text-[11px] leading-relaxed text-[var(--mk-text-secondary)]">
-              {item.description}
-            </div>
-          )}
-          {item.action && (
-            <button
-              type="button"
-              onClick={() => {
-                item.action?.onClick();
-                onDismiss(item.id);
-              }}
-              className="mt-1.5 text-[11px] font-medium text-[var(--mk-accent-primary)] hover:underline cursor-pointer"
-            >
-              {item.action.label}
-            </button>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => onDismiss(item.id)}
-          aria-label="关闭提示"
-          className="rounded p-0.5 text-[var(--mk-text-muted)] transition-colors hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      </div>
-      {item.duration > 0 && (
-        <motion.div
-          initial={{ scaleX: 1 }}
-          animate={{ scaleX: paused ? undefined : 0 }}
-          transition={{ duration: item.duration / 1000, ease: "linear" }}
-          className={`absolute right-0 bottom-0 left-0 h-[2px] origin-left opacity-45 ${meta.barClass}`}
+      <LiquidGlassSurface
+        cornerRadius={12}
+        elastic={false}
+        contentClassName="relative overflow-hidden rounded-[12px] p-3 pl-3.5 text-xs"
+      >
+        <span
+          className={`absolute top-2 bottom-2 left-1 w-[3px] rounded-full ${meta.barClass}`}
         />
-      )}
+        <div className="flex items-start gap-2.5">
+          <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${meta.iconClass}`} />
+          <div className="min-w-0 flex-1">
+            <div className="font-medium text-[var(--mk-text-primary)]">
+              {item.title}
+            </div>
+            {item.description && (
+              <div className="mt-0.5 break-all text-[11px] leading-relaxed text-[var(--mk-text-secondary)]">
+                {item.description}
+              </div>
+            )}
+            {item.action && (
+              <button
+                type="button"
+                onClick={() => {
+                  item.action?.onClick();
+                  onDismiss(item.id);
+                }}
+                className="mt-1.5 text-[11px] font-medium text-[var(--mk-accent-primary)] hover:underline cursor-pointer"
+              >
+                {item.action.label}
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onDismiss(item.id)}
+            aria-label="关闭提示"
+            className="rounded p-0.5 text-[var(--mk-text-muted)] transition-colors hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {item.duration > 0 && (
+          <motion.div
+            initial={{ scaleX: 1 }}
+            animate={{ scaleX: paused ? undefined : 0 }}
+            transition={{ duration: item.duration / 1000, ease: "linear" }}
+            className={`absolute right-0 bottom-0 left-0 h-[2px] origin-left opacity-45 ${meta.barClass}`}
+          />
+        )}
+      </LiquidGlassSurface>
     </motion.div>
   );
 }

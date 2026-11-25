@@ -14,6 +14,7 @@ import { SimpleSelect, Slider } from "@/components/ui/Controls";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Badge, Input } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
+import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
 import {
   ROBOT_ROLES_2027,
   deriveRobotAndClientIds,
@@ -129,19 +130,25 @@ export function SimulatorView() {
             editable={false}
             simOverrides={overrides}
           />
-          <div className="mk-glass-elevated pointer-events-none absolute top-3 left-3 z-20 flex items-center gap-2 rounded-full px-3 py-1 text-[11px]">
-            <span
-              className={`h-2 w-2 rounded-full ${
-                running ? "bg-[var(--mk-status-ok)]" : "bg-[var(--mk-text-muted)]"
-              }`}
-            />
-            <span className="font-medium text-[var(--mk-text-primary)]">
-              只读模拟视口
-            </span>
-            <span className="mk-tabular text-[var(--mk-text-secondary)]">
-              ID: {ids.robotId} →{" "}
-              {ids.clientId ? `0x${ids.clientId.toString(16).toUpperCase()}` : "无选手端"}
-            </span>
+          <div className="pointer-events-none absolute top-3 left-3 z-20">
+            <LiquidGlassSurface
+              cornerRadius={999}
+              elastic={true}
+              contentClassName="flex items-center gap-2 px-3 py-1 text-[11px]"
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  running ? "bg-[var(--mk-status-ok)]" : "bg-[var(--mk-text-muted)]"
+                }`}
+              />
+              <span className="font-medium text-[var(--mk-text-primary)]">
+                只读模拟视口
+              </span>
+              <span className="mk-tabular text-[var(--mk-text-secondary)]">
+                ID: {ids.robotId} →{" "}
+                {ids.clientId ? `0x${ids.clientId.toString(16).toUpperCase()}` : "无选手端"}
+              </span>
+            </LiquidGlassSurface>
           </div>
         </div>
 

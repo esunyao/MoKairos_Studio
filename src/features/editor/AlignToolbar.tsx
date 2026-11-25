@@ -8,6 +8,7 @@ import {
   Crosshair,
 } from "lucide-react";
 import { Tooltip } from "@/components/ui/Controls";
+import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
 import { useCanvasStore } from "@/stores/useCanvasStore";
 import { useDocumentStore, type AlignMode } from "@/stores/useDocumentStore";
 
@@ -38,25 +39,32 @@ export function AlignToolbar() {
   }
 
   return (
-    <div className="mk-glass-elevated pointer-events-auto absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-full px-2 py-1">
-      <span className="mk-tabular px-2 text-[11px] font-medium text-[var(--mk-text-secondary)]">
-        已选 {selectedIds.length}
-      </span>
-      <span className="h-3.5 w-px bg-[var(--mk-border-subtle)]" />
-      {ALIGN_ACTIONS.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Tooltip key={item.mode} content={item.label}>
-            <button
-              type="button"
-              onClick={() => alignGraphics(selectedIds, item.mode)}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--mk-text-secondary)] transition-colors hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
-            >
-              <Icon className="h-3.5 w-3.5" />
-            </button>
-          </Tooltip>
-        );
-      })}
+    <div className="pointer-events-none absolute top-3 left-1/2 z-20 -translate-x-1/2">
+      <LiquidGlassSurface
+        cornerRadius={999}
+        elastic={true}
+        className="pointer-events-auto"
+        contentClassName="flex items-center gap-0.5 px-2 py-1"
+      >
+        <span className="mk-tabular px-2 text-[11px] font-medium text-[var(--mk-text-secondary)]">
+          已选 {selectedIds.length}
+        </span>
+        <span className="h-3.5 w-px bg-[var(--mk-border-subtle)]" />
+        {ALIGN_ACTIONS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Tooltip key={item.mode} content={item.label}>
+              <button
+                type="button"
+                onClick={() => alignGraphics(selectedIds, item.mode)}
+                className="flex h-6 w-6 items-center justify-center rounded-full text-[var(--mk-text-secondary)] transition-colors hover:bg-[var(--mk-bg-surface-hover)] hover:text-[var(--mk-text-primary)] cursor-pointer"
+              >
+                <Icon className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+          );
+        })}
+      </LiquidGlassSurface>
     </div>
   );
 }

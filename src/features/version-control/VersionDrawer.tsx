@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { computeDocumentDiff } from "@/domain/versioning/diffEngine";
+import { LiquidGlassSurface } from "@/components/ui/liquid-glass";
 import { toast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/Button";
 import { Badge, Input } from "@/components/ui/Primitives";
@@ -129,15 +130,22 @@ export function VersionDrawer() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-40 bg-[var(--mk-drawer-overlay-bg)] backdrop-blur-[2px]"
           />
           <motion.aside
             initial={{ x: 420, opacity: 0.7 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 420, opacity: 0.7 }}
             transition={{ type: "spring", stiffness: 400, damping: 34 }}
-            className="mk-glass-elevated fixed top-[var(--mk-topbar-height)] right-0 bottom-0 z-50 flex w-[min(94vw,430px)] flex-col border-l"
+            className="fixed top-[var(--mk-topbar-height)] right-0 bottom-0 z-50 w-[min(94vw,430px)]"
           >
+            <LiquidGlassSurface
+              variant="panel"
+              cornerRadius={0}
+              elastic={false}
+              className="flex h-full w-full flex-col border-l border-[var(--mk-border-subtle)]"
+              contentClassName="flex min-h-0 flex-1 flex-col"
+            >
             {/* 头部 */}
             <div className="flex items-center justify-between border-b border-[var(--mk-border-subtle)] px-4 py-3">
               <div className="flex items-center gap-2">
@@ -364,6 +372,7 @@ export function VersionDrawer() {
                 </div>
               )}
             </div>
+            </LiquidGlassSurface>
           </motion.aside>
         </>
       )}
