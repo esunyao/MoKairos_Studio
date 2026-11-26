@@ -26,3 +26,6 @@ dist-ssr
 # Local project documentation
 /doc-project/
 **/docp/
+
+.claude
+/target/

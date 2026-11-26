@@ -118,37 +118,35 @@ pub fn preflight_document(doc: &MkuiDocument) -> RustPreflightReport {
                 seq += 1;
             }
 
-            if let MkuiGraphic::Text {
-                text, group_id, ..
-            } = g
+            if !group_ids.contains(g.group_id()) {
+                issues.push(RustPreflightIssue {
+                    id: format!("rc_{seq}"),
+                    severity: "warn".to_string(),
+                    code: "ORPHAN_GROUP".to_string(),
+                    message: format!("图元「{dname}」引用了不存在的分组"),
+                    detail: None,
+                    frame_id: Some(frame.id.clone()),
+                    graphic_id: Some(g.id().to_string()),
+                });
+                seq += 1;
+            }
+
+            if let MkuiGraphic::Text { text, .. } = g
+                && text.len() > 30
             {
-                if !group_ids.contains(group_id.as_str()) {
-                    issues.push(RustPreflightIssue {
-                        id: format!("rc_{seq}"),
-                        severity: "warn".to_string(),
-                        code: "ORPHAN_GROUP".to_string(),
-                        message: format!("图元「{dname}」引用了不存在的分组"),
-                        detail: None,
-                        frame_id: Some(frame.id.clone()),
-                        graphic_id: Some(g.id().to_string()),
-                    });
-                    seq += 1;
-                }
-                if text.len() > 30 {
-                    issues.push(RustPreflightIssue {
-                        id: format!("rc_{seq}"),
-                        severity: "error".to_string(),
-                        code: "TEXT_UTF8_OVERFLOW".to_string(),
-                        message: format!(
-                            "文本图元「{dname}」UTF-8 字节数超限 ({} / 30 B)",
-                            text.len()
-                        ),
-                        detail: Some("裁判系统字符帧 data[30] 上限为 30 字节".to_string()),
-                        frame_id: Some(frame.id.clone()),
-                        graphic_id: Some(g.id().to_string()),
-                    });
-                    seq += 1;
-                }
+                issues.push(RustPreflightIssue {
+                    id: format!("rc_{seq}"),
+                    severity: "error".to_string(),
+                    code: "TEXT_UTF8_OVERFLOW".to_string(),
+                    message: format!(
+                        "文本图元「{dname}」UTF-8 字节数超限 ({} / 30 B)",
+                        text.len()
+                    ),
+                    detail: Some("裁判系统字符帧 data[30] 上限为 30 字节".to_string()),
+                    frame_id: Some(frame.id.clone()),
+                    graphic_id: Some(g.id().to_string()),
+                });
+                seq += 1;
             }
         }
     }

@@ -290,7 +290,7 @@ export function verifyRefereeFrame(frame: Uint8Array): boolean {
   return calcCrc16(frame.subarray(0, frame.length - 2)) === expectedCrc16;
 }
 
-/** 将 Frame 内全部（或仅动态）图元拆包并编码为协议帧数组 */
+/** 将 Frame 内全部（或仅动态）图元按组拆包并编码为协议帧数组（与 packetBudget 及 Rust 编码器对齐） */
 export function encodeFramePackets(params: {
   frame: MkuiFrame;
   senderId: number;
@@ -307,63 +307,80 @@ export function encodeFramePackets(params: {
     ? params.frame.graphics.filter((g) => g.dynamic)
     : params.frame.graphics;
 
-  const textGraphics = candidates.filter(
-    (g): g is TextGraphic => g.kind === "text",
-  );
-  for (const txt of textGraphics) {
-    const content = new Uint8Array(45);
-    content.set(encodeInteractionFigure(txt, params.operate), 0);
-    const encodedStr = textEncoder.encode(txt.text).slice(0, 30);
-    content.set(encodedStr, 15);
-    packets.push(
-      buildRefereeUiPacket({
-        subCmdId: 0x0110,
-        senderId: params.senderId,
-        receiverId: params.receiverId,
-        seq: seq++,
-        content,
-        direction: params.direction,
-        itemCount: 1,
-        summary: `字符 [${txt.figureName}] "${txt.text.slice(0, 12)}"`,
-      }),
-    );
+  const grouped = new Map<string, MkuiGraphic[]>();
+  for (const grp of params.frame.groups) {
+    grouped.set(grp.id, []);
+  }
+  for (const g of candidates) {
+    const bucket = grouped.get(g.groupId);
+    if (bucket) {
+      bucket.push(g);
+    } else {
+      grouped.set(g.groupId, [g]);
+    }
   }
 
-  const shapes = candidates.filter((g) => g.kind !== "text");
-  for (let i = 0; i < shapes.length; i += 7) {
-    const chunk = shapes.slice(i, i + 7);
-    let slotCount: 1 | 2 | 5 | 7 = 7;
-    let subCmdId: 0x0101 | 0x0102 | 0x0103 | 0x0104 = 0x0104;
-    if (chunk.length === 1) {
-      slotCount = 1;
-      subCmdId = 0x0101;
-    } else if (chunk.length === 2) {
-      slotCount = 2;
-      subCmdId = 0x0102;
-    } else if (chunk.length <= 5) {
-      slotCount = 5;
-      subCmdId = 0x0103;
-    }
+  for (const items of grouped.values()) {
+    if (items.length === 0) continue;
 
-    const content = new Uint8Array(slotCount * 15);
-    for (let j = 0; j < chunk.length; j++) {
-      content.set(encodeInteractionFigure(chunk[j], params.operate), j * 15);
-    }
-
-    packets.push(
-      buildRefereeUiPacket({
-        subCmdId,
-        senderId: params.senderId,
-        receiverId: params.receiverId,
-        seq: seq++,
-        content,
-        direction: params.direction,
-        itemCount: chunk.length,
-        summary: `${chunk.length} 个图形 (${chunk
-          .map((item) => item.figureName)
-          .join(", ")})`,
-      }),
+    const textGraphics = items.filter(
+      (g): g is TextGraphic => g.kind === "text",
     );
+    for (const txt of textGraphics) {
+      const content = new Uint8Array(45);
+      content.set(encodeInteractionFigure(txt, params.operate), 0);
+      const encodedStr = textEncoder.encode(txt.text).slice(0, 30);
+      content.set(encodedStr, 15);
+      packets.push(
+        buildRefereeUiPacket({
+          subCmdId: 0x0110,
+          senderId: params.senderId,
+          receiverId: params.receiverId,
+          seq: seq++,
+          content,
+          direction: params.direction,
+          itemCount: 1,
+          summary: `字符 [${txt.figureName}] "${txt.text.slice(0, 12)}"`,
+        }),
+      );
+    }
+
+    const shapes = items.filter((g) => g.kind !== "text");
+    for (let i = 0; i < shapes.length; i += 7) {
+      const chunk = shapes.slice(i, i + 7);
+      let slotCount: 1 | 2 | 5 | 7 = 7;
+      let subCmdId: 0x0101 | 0x0102 | 0x0103 | 0x0104 = 0x0104;
+      if (chunk.length === 1) {
+        slotCount = 1;
+        subCmdId = 0x0101;
+      } else if (chunk.length === 2) {
+        slotCount = 2;
+        subCmdId = 0x0102;
+      } else if (chunk.length <= 5) {
+        slotCount = 5;
+        subCmdId = 0x0103;
+      }
+
+      const content = new Uint8Array(slotCount * 15);
+      for (let j = 0; j < chunk.length; j++) {
+        content.set(encodeInteractionFigure(chunk[j], params.operate), j * 15);
+      }
+
+      packets.push(
+        buildRefereeUiPacket({
+          subCmdId,
+          senderId: params.senderId,
+          receiverId: params.receiverId,
+          seq: seq++,
+          content,
+          direction: params.direction,
+          itemCount: chunk.length,
+          summary: `${chunk.length} 个图形 (${chunk
+            .map((item) => item.figureName)
+            .join(", ")})`,
+        }),
+      );
+    }
   }
 
   return packets;

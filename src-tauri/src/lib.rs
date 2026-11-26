@@ -1,10 +1,8 @@
 //! MoKairos Studio Tauri 宿主入口与命令注册
 
-pub mod archive;
+pub use mokairos_codegen::{archive, error, model, protocol};
+
 pub mod commands;
-pub mod error;
-pub mod model;
-pub mod protocol;
 pub mod versioning;
 
 use commands::{project_cmd, protocol_cmd, storage_cmd, version_cmd};

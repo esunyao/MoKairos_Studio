@@ -13,7 +13,9 @@ use crate::archive::pack::{
     write_zip_entries_to_vec,
 };
 use crate::archive::unpack::{read_entry_bytes, read_optional_entry_bytes};
-use crate::archive::{DESIGN_ENTRY, HISTORY_COMMITS_PREFIX, HISTORY_INDEX_ENTRY, MANIFEST_ENTRY};
+use crate::archive::{
+    CODEGEN_PREFIX, DESIGN_ENTRY, HISTORY_COMMITS_PREFIX, HISTORY_INDEX_ENTRY, MANIFEST_ENTRY,
+};
 use crate::error::{AppError, AppResult};
 use crate::model::{MkuiDocument, VersionCommitEntry, VersionIndex};
 
@@ -118,7 +120,7 @@ pub fn load_commit_snapshot(path: &Path, commit_id: &str) -> AppResult<MkuiDocum
     Ok(doc)
 }
 
-/// 将指定历史版本导出为独立的 .mkui 文件（以该版本作为当前工作区并保留历史记录）
+/// 将指定历史版本导出为独立的 .mkui 文件（以该版本作为当前工作区并保留历史记录与当前工作区 codegen/*）
 pub fn export_commit_to_mkui(
     source_path: &Path,
     target_path: &Path,
@@ -126,6 +128,12 @@ pub fn export_commit_to_mkui(
 ) -> AppResult<()> {
     let snapshot_doc = load_commit_snapshot(source_path, commit_id)?;
     let mut entries: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+
+    for (name, bytes) in read_preserved_entries(source_path)? {
+        if name.starts_with(CODEGEN_PREFIX) {
+            entries.insert(name, bytes);
+        }
+    }
 
     let doc_bytes = rmp_serde::to_vec_named(&snapshot_doc)?;
     let stats = compute_document_stats(&snapshot_doc);
@@ -289,5 +297,46 @@ mod tests {
         assert!(validate_archive_entry_name("/abs/path").is_err());
         assert!(validate_archive_entry_name("C:\\evil").is_err());
         assert!(validate_archive_entry_name("history/commits/c_1.msgpack").is_ok());
+    }
+
+    #[test]
+    fn preserve_codegen_entries_on_save_and_export_commit() {
+        use crate::archive::pack::save_mkui_archive_with_codegen;
+        use crate::model::CodegenBundle;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mkui_path = dir.path().join("with_codegen.mkui");
+
+        let doc_v1 = sample_doc("V1");
+        let mut bundle = CodegenBundle {
+            profile_toml: "schema = 1\nmode = \"api\"\nprefix = \"mk_hud\"\n".to_string(),
+            code_files: BTreeMap::new(),
+            lib_overrides: BTreeMap::new(),
+        };
+        bundle
+            .code_files
+            .insert("nodes.c".to_string(), "int32_t add_one(int32_t x) { return x + 1; }\n".to_string());
+        bundle
+            .lib_overrides
+            .insert("runtime.c.j2".to_string(), "/* custom runtime */\n".to_string());
+
+        save_mkui_archive_with_codegen(&mkui_path, &doc_v1, None, Some(&bundle)).unwrap();
+        let idx =
+            commit_version_to_archive(&mkui_path, &doc_v1, "含代码生成配置", None, "Esuny")
+                .unwrap();
+        let c1_id = idx.head_commit_id.unwrap();
+
+        // 常规保存（不传 codegen）应原样保留 codegen/*
+        let doc_v2 = sample_doc("V2");
+        save_mkui_archive(&mkui_path, &doc_v2, None).unwrap();
+        let opened = open_mkui_archive(&mkui_path).unwrap();
+        assert_eq!(opened.codegen, Some(bundle.clone()));
+
+        // 从历史快照导出也应保留当前工作区的 codegen/*
+        let exported_path = dir.path().join("exported.mkui");
+        export_commit_to_mkui(&mkui_path, &exported_path, &c1_id).unwrap();
+        let exported = open_mkui_archive(&exported_path).unwrap();
+        assert_eq!(exported.document, doc_v1);
+        assert_eq!(exported.codegen, Some(bundle));
     }
 }

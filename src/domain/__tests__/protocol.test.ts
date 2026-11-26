@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
+import protocolVectors from "../../../fixtures/protocol-vectors.json";
 import { deriveRobotAndClientIds } from "@/domain/protocol/constants";
 import {
+  calcCrc8,
+  calcCrc16,
   encodeFramePackets,
+  encodeInteractionFigure,
+  formatHexBytes,
   verifyRefereeFrame,
+  type GraphicOperateType,
 } from "@/domain/protocol/crcAndFrame";
 import { allocateFigureName, getUtf8ByteLength } from "@/domain/protocol/naming";
 import { calculatePacketBudget } from "@/domain/protocol/packetBudget";
 import { preflightFrame } from "@/domain/protocol/preflight";
 import { createDocumentFromTemplate } from "@/domain/templates/starterTemplates";
-import type { MkuiFrame } from "@/domain/protocol/types";
+import type { MkuiFrame, MkuiGraphic } from "@/domain/protocol/types";
 
 describe("2027 裁判系统协议校验、分包与封帧", () => {
   it("应精确计算 UTF-8 字节数并在超过 30 字节时触发 Error 阻断", () => {
@@ -140,5 +146,67 @@ describe("2027 裁判系统协议校验、分包与封帧", () => {
     expect(issues.some((i) => i.severity === "warn" && i.code === "OUT_OF_VIEWPORT")).toBe(
       true,
     );
+  });
+
+  it("应与 Rust 共享黄金协议向量 fixtures/protocol-vectors.json 逐字节一致", () => {
+    const parseHex = (hexStr: string) =>
+      new Uint8Array(
+        hexStr
+          .trim()
+          .split(/\s+/)
+          .map((b) => Number.parseInt(b, 16)),
+      );
+
+    for (const v of protocolVectors.crc8Vectors) {
+      expect(calcCrc8(parseHex(v.inputHex))).toBe(v.expected);
+    }
+    for (const v of protocolVectors.crc16Vectors) {
+      expect(calcCrc16(parseHex(v.inputHex))).toBe(v.expected);
+    }
+
+    for (const v of protocolVectors.figureVectors) {
+      const actual = encodeInteractionFigure(
+        v.graphic as MkuiGraphic,
+        v.operate as GraphicOperateType,
+      );
+      expect(formatHexBytes(actual).toLowerCase()).toBe(v.expectedHex);
+    }
+
+    for (const v of protocolVectors.groupPacketVectors) {
+      const packets = encodeFramePackets({
+        frame: v.frame as MkuiFrame,
+        senderId: v.senderId,
+        receiverId: v.receiverId,
+        operate: v.operate as GraphicOperateType,
+        startSeq: v.startSeq,
+      });
+      expect(packets.length).toBe(v.expectedFramesHex.length);
+      packets.forEach((pkt, idx) => {
+        expect(formatHexBytes(pkt.rawBytes).toLowerCase()).toBe(
+          v.expectedFramesHex[idx],
+        );
+        expect(pkt.crcValid).toBe(true);
+      });
+    }
+
+    for (const v of protocolVectors.fullFrameVectors) {
+      const frame: MkuiFrame = {
+        id: "f_vec",
+        name: "Vec",
+        groups: [{ id: "g1", name: "G1", visible: true, locked: false, collapsed: false }],
+        graphics: [v.graphic as MkuiGraphic],
+      };
+      const packets = encodeFramePackets({
+        frame,
+        senderId: v.senderId,
+        receiverId: v.receiverId,
+        operate: v.operate as GraphicOperateType,
+        startSeq: v.seq,
+      });
+      expect(packets).toHaveLength(1);
+      expect(formatHexBytes(packets[0].rawBytes).toLowerCase()).toBe(
+        v.expectedHex,
+      );
+    }
   });
 });

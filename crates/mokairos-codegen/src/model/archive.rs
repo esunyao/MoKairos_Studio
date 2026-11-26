@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::MkuiDocument;
+use super::{CodegenBundle, MkuiDocument};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -70,6 +70,8 @@ pub struct OpenedMkuiProject {
     pub document: MkuiDocument,
     pub history: VersionIndex,
     pub archive_size_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub codegen: Option<CodegenBundle>,
 }
 
 /// 保存 .mkui 工程后的统计回执

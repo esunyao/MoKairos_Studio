@@ -233,6 +233,32 @@ impl MkuiGraphic {
         }
     }
 
+    pub fn var_key(&self) -> Option<&str> {
+        match self {
+            Self::Line { var_key, .. }
+            | Self::Rect { var_key, .. }
+            | Self::Circle { var_key, .. }
+            | Self::Ellipse { var_key, .. }
+            | Self::Arc { var_key, .. }
+            | Self::Float { var_key, .. }
+            | Self::Int { var_key, .. }
+            | Self::Text { var_key, .. } => var_key.as_deref(),
+        }
+    }
+
+    pub fn group_id(&self) -> &str {
+        match self {
+            Self::Line { group_id, .. }
+            | Self::Rect { group_id, .. }
+            | Self::Circle { group_id, .. }
+            | Self::Ellipse { group_id, .. }
+            | Self::Arc { group_id, .. }
+            | Self::Float { group_id, .. }
+            | Self::Int { group_id, .. }
+            | Self::Text { group_id, .. } => group_id,
+        }
+    }
+
     pub fn layer(&self) -> u8 {
         match self {
             Self::Line { layer, .. }
@@ -269,6 +295,19 @@ impl MkuiGraphic {
             | Self::Float { line_width, .. }
             | Self::Int { line_width, .. }
             | Self::Text { line_width, .. } => *line_width,
+        }
+    }
+
+    pub fn dynamic(&self) -> bool {
+        match self {
+            Self::Line { dynamic, .. }
+            | Self::Rect { dynamic, .. }
+            | Self::Circle { dynamic, .. }
+            | Self::Ellipse { dynamic, .. }
+            | Self::Arc { dynamic, .. }
+            | Self::Float { dynamic, .. }
+            | Self::Int { dynamic, .. }
+            | Self::Text { dynamic, .. } => *dynamic,
         }
     }
 

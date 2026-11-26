@@ -1,5 +1,5 @@
 //! .mkui ZIP + MessagePack 原子打包器
-//! 约定：常规保存时自动保留归档中已有的 history/ 与 assets/ 条目，避免覆盖丢失历史记录。
+//! 约定：常规保存时自动保留归档中已有的 history/、assets/ 与未覆盖的 codegen/ 条目。
 
 use std::collections::BTreeMap;
 use std::fs::{self, File};
@@ -11,11 +11,20 @@ use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::archive::unpack::validate_archive_entry_name;
-use crate::archive::{DESIGN_ENTRY, HISTORY_INDEX_ENTRY, MANIFEST_ENTRY};
-use crate::error::AppResult;
-use crate::model::{
-    CanvasSpec, ManifestStats, MkuiDocument, MkuiManifest, SavedMkuiReceipt, VersionIndex,
+use crate::archive::{
+    CODEGEN_CODE_PREFIX, CODEGEN_LIB_PREFIX, CODEGEN_PREFIX, CODEGEN_PROFILE_ENTRY,
+    DESIGN_ENTRY, HISTORY_INDEX_ENTRY, MANIFEST_ENTRY, MAX_CODEGEN_ENTRY_BYTES,
 };
+use crate::error::{AppError, AppResult};
+use crate::model::{
+    CanvasSpec, CodegenBundle, ManifestStats, MkuiDocument, MkuiManifest, SavedMkuiReceipt,
+    VersionIndex,
+};
+
+/// 统一规范化为 LF 换行
+pub fn normalize_lf(input: &str) -> String {
+    input.replace("\r\n", "\n")
+}
 
 /// 统计文档中的帧、图元与字符数量
 pub fn compute_document_stats(doc: &MkuiDocument) -> ManifestStats {
@@ -65,7 +74,7 @@ pub fn build_manifest(
     }
 }
 
-/// 读取已有 .mkui 包中除核心主文件外的附属条目（如 history/ 与 assets/）
+/// 读取已有 .mkui 包中除核心主文件外的附属条目（如 history/、assets/ 与 codegen/）
 pub fn read_preserved_entries(path: &Path) -> AppResult<BTreeMap<String, Vec<u8>>> {
     let mut preserved = BTreeMap::new();
     if !path.exists() {
@@ -130,11 +139,9 @@ pub fn atomic_write_bytes(target_path: &Path, bytes: &[u8]) -> AppResult<()> {
                 return Err(err.into());
             }
         }
-    } else {
-        if let Err(err) = fs::rename(&tmp_path, target_path) {
-            let _ = fs::remove_file(&tmp_path);
-            return Err(err.into());
-        }
+    } else if let Err(err) = fs::rename(&tmp_path, target_path) {
+        let _ = fs::remove_file(&tmp_path);
+        return Err(err.into());
     }
 
     Ok(())
@@ -156,11 +163,39 @@ pub fn write_zip_entries_to_vec(entries: &BTreeMap<String, Vec<u8>>) -> AppResul
     Ok(cursor.into_inner())
 }
 
-/// 保存工作区文档到 .mkui，并保留或初始化版本历史
+fn write_codegen_entry(
+    entries: &mut BTreeMap<String, Vec<u8>>,
+    entry_name: String,
+    content: &str,
+) -> AppResult<()> {
+    validate_archive_entry_name(&entry_name)?;
+    let normalized = normalize_lf(content);
+    let bytes = normalized.into_bytes();
+    if bytes.len() > MAX_CODEGEN_ENTRY_BYTES {
+        return Err(AppError::SecurityViolation(format!(
+            "codegen 条目 {entry_name} 超过单文件 1 MB 上限 ({} B)",
+            bytes.len()
+        )));
+    }
+    entries.insert(entry_name, bytes);
+    Ok(())
+}
+
+/// 保存工作区文档到 .mkui（不修改既有 codegen/* 条目）
 pub fn save_mkui_archive(
     path: &Path,
     doc: &MkuiDocument,
     pending_commits: Option<(VersionIndex, BTreeMap<String, MkuiDocument>)>,
+) -> AppResult<SavedMkuiReceipt> {
+    save_mkui_archive_with_codegen(path, doc, pending_commits, None)
+}
+
+/// 保存工作区文档到 .mkui，同时可选写入 codegen/* 配置与代码文件
+pub fn save_mkui_archive_with_codegen(
+    path: &Path,
+    doc: &MkuiDocument,
+    pending_commits: Option<(VersionIndex, BTreeMap<String, MkuiDocument>)>,
+    codegen: Option<&CodegenBundle>,
 ) -> AppResult<SavedMkuiReceipt> {
     let mut entries = read_preserved_entries(path)?;
 
@@ -190,6 +225,33 @@ pub fn save_mkui_archive(
         }
         existing_index
     };
+
+    if let Some(bundle) = codegen {
+        entries.retain(|k, _| !k.starts_with(CODEGEN_PREFIX));
+        if !bundle.profile_toml.trim().is_empty() {
+            write_codegen_entry(
+                &mut entries,
+                CODEGEN_PROFILE_ENTRY.to_string(),
+                &bundle.profile_toml,
+            )?;
+        }
+        for (rel_path, content) in &bundle.code_files {
+            let trimmed = rel_path.trim_start_matches('/');
+            write_codegen_entry(
+                &mut entries,
+                format!("{CODEGEN_CODE_PREFIX}{trimmed}"),
+                content,
+            )?;
+        }
+        for (rel_path, content) in &bundle.lib_overrides {
+            let trimmed = rel_path.trim_start_matches('/');
+            write_codegen_entry(
+                &mut entries,
+                format!("{CODEGEN_LIB_PREFIX}{trimmed}"),
+                content,
+            )?;
+        }
+    }
 
     let msgpack_bytes = rmp_serde::to_vec_named(doc)?;
     let msgpack_len = msgpack_bytes.len();

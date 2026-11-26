@@ -1,0 +1,705 @@
+{
+  "crc8Vectors": [
+    {
+      "inputHex": "a5 33 00 00",
+      "expected": 249
+    },
+    {
+      "inputHex": "a5 15 00 01",
+      "expected": 226
+    }
+  ],
+  "crc16Vectors": [
+    {
+      "inputHex": "a5 33 00 00 f9 01 03 10 01 03 00 03 01 54 58 54 79 08 84 00 02 90 01 19 00 00 00 00 41 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+      "expected": 55040
+    },
+    {
+      "inputHex": "a5 33 00 00 f9 01 03 10 01 03 00 03 01 54 58 54 79 08 84 01 02 90 01 19 00 00 00 00 e7 94 b5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+      "expected": 42355
+    }
+  ],
+  "figureVectors": [
+    {
+      "name": "line_add",
+      "operate": 1,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "l1",
+        "figureName": "L01",
+        "displayName": "线",
+        "kind": "line",
+        "startX": 100,
+        "startY": 200,
+        "endX": 800,
+        "endY": 200
+      },
+      "expectedHex": "4c 30 31 41 08 00 00 02 90 01 19 00 80 0c 19"
+    },
+    {
+      "name": "rect_mod",
+      "operate": 2,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "r1",
+        "figureName": "R01",
+        "displayName": "框",
+        "kind": "rect",
+        "startX": 400,
+        "startY": 300,
+        "endX": 500,
+        "endY": 360
+      },
+      "expectedHex": "52 30 31 4a 08 00 00 02 40 86 25 00 d0 07 2d"
+    },
+    {
+      "name": "circle_del",
+      "operate": 3,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "c1",
+        "figureName": "C01",
+        "displayName": "圆",
+        "kind": "circle",
+        "centerX": 960,
+        "centerY": 540,
+        "radius": 45
+      },
+      "expectedHex": "43 30 31 53 08 00 00 02 00 8f 43 2d 00 00 00"
+    },
+    {
+      "name": "ellipse_add",
+      "operate": 1,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "e1",
+        "figureName": "E01",
+        "displayName": "椭圆",
+        "kind": "ellipse",
+        "centerX": 960,
+        "centerY": 540,
+        "rx": 120,
+        "ry": 60
+      },
+      "expectedHex": "45 30 31 59 08 00 00 02 00 8f 43 00 e0 81 07"
+    },
+    {
+      "name": "arc_add",
+      "operate": 1,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "a1",
+        "figureName": "A01",
+        "displayName": "弧",
+        "kind": "arc",
+        "centerX": 960,
+        "centerY": 540,
+        "rx": 180,
+        "ry": 180,
+        "startAngle": 45,
+        "endAngle": 315
+      },
+      "expectedHex": "41 30 31 61 48 8b 9d 02 00 8f 43 00 d0 82 16"
+    },
+    {
+      "name": "float_pos_half",
+      "operate": 1,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "f1",
+        "figureName": "F01",
+        "displayName": "正浮点",
+        "kind": "float",
+        "x": 100,
+        "y": 200,
+        "fontSize": 20,
+        "value": 12.3455
+      },
+      "expectedHex": "46 30 31 69 08 05 00 02 90 01 19 3a 30 00 00"
+    },
+    {
+      "name": "float_neg_half",
+      "operate": 2,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "f2",
+        "figureName": "F02",
+        "displayName": "负浮点半值",
+        "kind": "float",
+        "x": 100,
+        "y": 200,
+        "fontSize": 20,
+        "value": -0.0005
+      },
+      "expectedHex": "46 30 32 6a 08 05 00 02 90 01 19 00 00 00 00"
+    },
+    {
+      "name": "float_clamp_max",
+      "operate": 2,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "f3",
+        "figureName": "F03",
+        "displayName": "浮点上溢",
+        "kind": "float",
+        "x": 100,
+        "y": 200,
+        "fontSize": 20,
+        "value": 3000000000
+      },
+      "expectedHex": "46 30 33 6a 08 05 00 02 90 01 19 ff ff ff 7f"
+    },
+    {
+      "name": "int_neg",
+      "operate": 2,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "i1",
+        "figureName": "I01",
+        "displayName": "负整数",
+        "kind": "int",
+        "x": 100,
+        "y": 200,
+        "fontSize": 20,
+        "value": -42
+      },
+      "expectedHex": "49 30 31 72 08 05 00 02 90 01 19 d6 ff ff ff"
+    },
+    {
+      "name": "text_zh",
+      "operate": 1,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "t1",
+        "figureName": "TXT",
+        "displayName": "文字",
+        "kind": "text",
+        "x": 100,
+        "y": 200,
+        "fontSize": 16,
+        "text": "电"
+      },
+      "expectedHex": "54 58 54 79 08 84 01 02 90 01 19 00 00 00 00"
+    }
+  ],
+  "groupPacketVectors": [
+    {
+      "name": "single_shape_1",
+      "operate": 1,
+      "senderId": 3,
+      "receiverId": 259,
+      "startSeq": 0,
+      "frame": {
+        "id": "f1",
+        "name": "M",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "G1",
+            "visible": true,
+            "locked": false,
+            "collapsed": false
+          }
+        ],
+        "graphics": [
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s1",
+            "figureName": "S01",
+            "displayName": "S1",
+            "kind": "line",
+            "startX": 101,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          }
+        ]
+      },
+      "expectedFramesHex": [
+        "a5 15 00 00 bc 01 03 01 01 03 00 03 01 53 30 31 41 08 00 00 02 94 01 19 00 b0 04 19 0c b9"
+      ]
+    },
+    {
+      "name": "two_shapes_2",
+      "operate": 1,
+      "senderId": 3,
+      "receiverId": 259,
+      "startSeq": 1,
+      "frame": {
+        "id": "f2",
+        "name": "M",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "G1",
+            "visible": true,
+            "locked": false,
+            "collapsed": false
+          }
+        ],
+        "graphics": [
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s1",
+            "figureName": "S01",
+            "displayName": "S1",
+            "kind": "line",
+            "startX": 101,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s2",
+            "figureName": "S02",
+            "displayName": "S2",
+            "kind": "line",
+            "startX": 102,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          }
+        ]
+      },
+      "expectedFramesHex": [
+        "a5 24 00 01 97 01 03 02 01 03 00 03 01 53 30 31 41 08 00 00 02 94 01 19 00 b0 04 19 53 30 32 41 08 00 00 02 98 01 19 00 b0 04 19 ea 31"
+      ]
+    },
+    {
+      "name": "three_shapes_5slots",
+      "operate": 2,
+      "senderId": 103,
+      "receiverId": 359,
+      "startSeq": 5,
+      "frame": {
+        "id": "f3",
+        "name": "M",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "G1",
+            "visible": true,
+            "locked": false,
+            "collapsed": false
+          }
+        ],
+        "graphics": [
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s1",
+            "figureName": "S01",
+            "displayName": "S1",
+            "kind": "line",
+            "startX": 101,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s2",
+            "figureName": "S02",
+            "displayName": "S2",
+            "kind": "line",
+            "startX": 102,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s3",
+            "figureName": "S03",
+            "displayName": "S3",
+            "kind": "line",
+            "startX": 103,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          }
+        ]
+      },
+      "expectedFramesHex": [
+        "a5 51 00 05 2c 01 03 03 01 67 00 67 01 53 30 31 42 08 00 00 02 94 01 19 00 b0 04 19 53 30 32 42 08 00 00 02 98 01 19 00 b0 04 19 53 30 33 42 08 00 00 02 9c 01 19 00 b0 04 19 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 90 e4"
+      ]
+    },
+    {
+      "name": "six_shapes_7slots",
+      "operate": 1,
+      "senderId": 1,
+      "receiverId": 257,
+      "startSeq": 10,
+      "frame": {
+        "id": "f4",
+        "name": "M",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "G1",
+            "visible": true,
+            "locked": false,
+            "collapsed": false
+          }
+        ],
+        "graphics": [
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s1",
+            "figureName": "S01",
+            "displayName": "S1",
+            "kind": "line",
+            "startX": 101,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s2",
+            "figureName": "S02",
+            "displayName": "S2",
+            "kind": "line",
+            "startX": 102,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s3",
+            "figureName": "S03",
+            "displayName": "S3",
+            "kind": "line",
+            "startX": 103,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s4",
+            "figureName": "S04",
+            "displayName": "S4",
+            "kind": "line",
+            "startX": 104,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s5",
+            "figureName": "S05",
+            "displayName": "S5",
+            "kind": "line",
+            "startX": 105,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s6",
+            "figureName": "S06",
+            "displayName": "S6",
+            "kind": "line",
+            "startX": 106,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          }
+        ]
+      },
+      "expectedFramesHex": [
+        "a5 6f 00 0a 47 01 03 04 01 01 00 01 01 53 30 31 41 08 00 00 02 94 01 19 00 b0 04 19 53 30 32 41 08 00 00 02 98 01 19 00 b0 04 19 53 30 33 41 08 00 00 02 9c 01 19 00 b0 04 19 53 30 34 41 08 00 00 02 a0 01 19 00 b0 04 19 53 30 35 41 08 00 00 02 a4 01 19 00 b0 04 19 53 30 36 41 08 00 00 02 a8 01 19 00 b0 04 19 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 f5 5e"
+      ]
+    },
+    {
+      "name": "multi_group_text_and_shapes",
+      "operate": 1,
+      "senderId": 3,
+      "receiverId": 259,
+      "startSeq": 0,
+      "frame": {
+        "id": "f5",
+        "name": "M",
+        "groups": [
+          {
+            "id": "g1",
+            "name": "G1",
+            "visible": true,
+            "locked": false,
+            "collapsed": false
+          },
+          {
+            "id": "g2",
+            "name": "G2",
+            "visible": true,
+            "locked": false,
+            "collapsed": false
+          }
+        ],
+        "graphics": [
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s1",
+            "figureName": "S01",
+            "displayName": "S1",
+            "kind": "line",
+            "startX": 101,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g2",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "tA",
+            "figureName": "TXT",
+            "displayName": "T",
+            "kind": "text",
+            "x": 100,
+            "y": 200,
+            "fontSize": 16,
+            "text": "A"
+          },
+          {
+            "groupId": "g2",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s2",
+            "figureName": "S02",
+            "displayName": "S2",
+            "kind": "line",
+            "startX": 102,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          },
+          {
+            "groupId": "g1",
+            "layer": 1,
+            "color": 2,
+            "lineWidth": 2,
+            "dynamic": true,
+            "visible": true,
+            "locked": false,
+            "id": "s3",
+            "figureName": "S03",
+            "displayName": "S3",
+            "kind": "line",
+            "startX": 103,
+            "startY": 200,
+            "endX": 300,
+            "endY": 200
+          }
+        ]
+      },
+      "expectedFramesHex": [
+        "a5 24 00 00 c9 01 03 02 01 03 00 03 01 53 30 31 41 08 00 00 02 94 01 19 00 b0 04 19 53 30 33 41 08 00 00 02 9c 01 19 00 b0 04 19 3a 00",
+        "a5 33 00 01 a7 01 03 10 01 03 00 03 01 54 58 54 79 08 84 00 02 90 01 19 00 00 00 00 41 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 e9 a7",
+        "a5 15 00 02 00 01 03 01 01 03 00 03 01 53 30 32 41 08 00 00 02 98 01 19 00 b0 04 19 56 cd"
+      ]
+    }
+  ],
+  "fullFrameVectors": [
+    {
+      "name": "text_ascii_A",
+      "operate": 1,
+      "senderId": 3,
+      "receiverId": 259,
+      "seq": 0,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "tA",
+        "figureName": "TXT",
+        "displayName": "A",
+        "kind": "text",
+        "x": 100,
+        "y": 200,
+        "fontSize": 16,
+        "text": "A"
+      },
+      "expectedHex": "a5 33 00 00 f9 01 03 10 01 03 00 03 01 54 58 54 79 08 84 00 02 90 01 19 00 00 00 00 41 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 d7"
+    },
+    {
+      "name": "text_utf8_dian",
+      "operate": 1,
+      "senderId": 3,
+      "receiverId": 259,
+      "seq": 0,
+      "graphic": {
+        "groupId": "g1",
+        "layer": 1,
+        "color": 2,
+        "lineWidth": 2,
+        "dynamic": true,
+        "visible": true,
+        "locked": false,
+        "id": "tZ",
+        "figureName": "TXT",
+        "displayName": "A",
+        "kind": "text",
+        "x": 100,
+        "y": 200,
+        "fontSize": 16,
+        "text": "电"
+      },
+      "expectedHex": "a5 33 00 00 f9 01 03 10 01 03 00 03 01 54 58 54 79 08 84 01 02 90 01 19 00 00 00 00 e7 94 b5 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 73 a5"
+    }
+  ]
+}
