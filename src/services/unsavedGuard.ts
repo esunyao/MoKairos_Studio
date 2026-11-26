@@ -2,6 +2,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isTauriRuntime } from "./tauriBridge";
 import { saveCurrentProject } from "./projectActions";
 import { useAppStore } from "@/stores/useAppStore";
+import { useCodegenStore } from "@/stores/useCodegenStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 
@@ -12,7 +13,8 @@ import { useProjectStore } from "@/stores/useProjectStore";
 
 export function hasUnsavedChanges(): boolean {
   const project = useProjectStore.getState();
-  return project.hasOpenProject && project.isDirty;
+  const codegenDirty = useCodegenStore.getState().isDirty;
+  return project.hasOpenProject && (project.isDirty || codegenDirty);
 }
 
 export function guardUnsavedChanges(params: {

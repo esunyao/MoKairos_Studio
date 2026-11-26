@@ -5,7 +5,7 @@ pub use mokairos_codegen::{archive, error, model, protocol};
 pub mod commands;
 pub mod versioning;
 
-use commands::{project_cmd, protocol_cmd, storage_cmd, version_cmd};
+use commands::{codegen_cmd, project_cmd, protocol_cmd, storage_cmd, version_cmd};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -25,6 +25,15 @@ pub fn run() {
             protocol_cmd::protocol_preflight,
             storage_cmd::recent_projects_load,
             storage_cmd::recent_projects_save,
+            codegen_cmd::codegen_load_presets,
+            codegen_cmd::codegen_load_builtin_base_lib,
+            codegen_cmd::codegen_parse_profile,
+            codegen_cmd::codegen_validate_profile,
+            codegen_cmd::codegen_preview,
+            codegen_cmd::codegen_parse_codefile,
+            codegen_cmd::codegen_upsert_code_node,
+            codegen_cmd::codegen_export_cmake,
+            codegen_cmd::codegen_export_sources,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

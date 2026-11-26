@@ -24,6 +24,7 @@ import { saveCurrentProject } from "@/services/projectActions";
 import { navigateToLaunchpadWithGuard } from "@/services/unsavedGuard";
 import { useAppStore, type WorkspaceView } from "@/stores/useAppStore";
 import { useCanvasStore } from "@/stores/useCanvasStore";
+import { useCodegenStore } from "@/stores/useCodegenStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useVersionStore } from "@/stores/useVersionStore";
@@ -40,7 +41,7 @@ const WORKSPACE_TABS: ReadonlyArray<{
 }> = [
   { id: "design", label: "编辑", icon: Wrench },
   { id: "simulate", label: "模拟", icon: Radio },
-  { id: "export", label: "导出", icon: Cpu },
+  { id: "export", label: "代码生成", icon: Cpu },
 ];
 
 export function AppTitleBar() {
@@ -63,7 +64,9 @@ export function AppTitleBar() {
   const redo = useDocumentStore((s) => s.redo);
 
   const hasOpenProject = useProjectStore((s) => s.hasOpenProject);
-  const isDirty = useProjectStore((s) => s.isDirty);
+  const projectDirty = useProjectStore((s) => s.isDirty);
+  const codegenDirty = useCodegenStore((s) => s.isDirty);
+  const isDirty = projectDirty || codegenDirty;
 
   const previewTeam = useCanvasStore((s) => s.previewTeam);
   const setPreviewTeam = useCanvasStore((s) => s.setPreviewTeam);
@@ -77,7 +80,7 @@ export function AppTitleBar() {
         cornerRadius={0}
         elastic={false}
         lightweight
-        className="h-full w-full border-b"
+        className="h-full w-full border-b border-gray-800/20"
         contentClassName="flex h-full w-full items-center justify-between px-3"
       >
         {/* 左侧：品牌 + 带守卫的返回大厅 + 工程/画面选择 */}

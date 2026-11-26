@@ -5,7 +5,7 @@ import { TooltipProvider } from "@/components/ui/Controls";
 import { UnsavedChangesDialog } from "@/components/ui/UnsavedChangesDialog";
 import { Toaster } from "@/components/ui/toast";
 import { EditorWorkspace } from "@/features/editor/EditorWorkspace";
-import { ExportMockView } from "@/features/export-mock/ExportMockView";
+import { CodegenView } from "@/features/codegen/CodegenView";
 import { LaunchpadView } from "@/features/launchpad/LaunchpadView";
 import { NewProjectDialog } from "@/features/launchpad/NewProjectDialog";
 import { SettingsDialog } from "@/features/launchpad/SettingsDialog";
@@ -49,7 +49,8 @@ export default function App() {
         target instanceof HTMLElement &&
         (target.tagName === "INPUT" ||
           target.tagName === "TEXTAREA" ||
-          target.isContentEditable)
+          target.isContentEditable ||
+          Boolean(target.closest(".monaco-editor")))
       ) {
         return;
       }
@@ -138,7 +139,7 @@ export default function App() {
                 {view === "launchpad" && <LaunchpadView />}
                 {view === "design" && <EditorWorkspace />}
                 {view === "simulate" && <SimulatorView />}
-                {view === "export" && <ExportMockView />}
+                {view === "export" && <CodegenView />}
               </motion.div>
             </AnimatePresence>
           </div>

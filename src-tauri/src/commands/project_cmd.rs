@@ -6,11 +6,11 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use crate::archive::pack::save_mkui_archive;
+use crate::archive::pack::save_mkui_archive_with_codegen;
 use crate::archive::unpack::{open_mkui_archive, read_mkui_manifest};
 use crate::error::AppResult;
 use crate::model::{
-    MkuiDocument, MkuiManifest, OpenedMkuiProject, SavedMkuiReceipt, VersionIndex,
+    CodegenBundle, MkuiDocument, MkuiManifest, OpenedMkuiProject, SavedMkuiReceipt, VersionIndex,
 };
 
 #[derive(Debug, Deserialize)]
@@ -20,16 +20,17 @@ pub struct PendingHistoryPayload {
     pub snapshots: BTreeMap<String, MkuiDocument>,
 }
 
-/// 保存设计文档到 .mkui（ZIP + MessagePack），保留原有历史快照或写入草稿暂存历史
+/// 保存设计文档到 .mkui（ZIP + MessagePack），保留原有历史快照并可选写入 codegen/*
 #[tauri::command]
 pub fn project_save_mkui(
     file_path: String,
     document: MkuiDocument,
     pending_history: Option<PendingHistoryPayload>,
+    codegen: Option<CodegenBundle>,
 ) -> AppResult<SavedMkuiReceipt> {
     let path = PathBuf::from(file_path);
     let pending = pending_history.map(|p| (p.index, p.snapshots));
-    save_mkui_archive(&path, &document, pending)
+    save_mkui_archive_with_codegen(&path, &document, pending, codegen.as_ref())
 }
 
 /// 打开并校验 .mkui 工程

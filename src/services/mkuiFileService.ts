@@ -1,5 +1,6 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { exportToRmuiJson, importRmuiJson } from "@/domain/adapters/rmuiAdapter";
+import type { CodegenBundle } from "@/domain/codegen/types";
 import type {
   MkuiDocument,
   MkuiManifest,
@@ -17,6 +18,7 @@ export interface OpenedMkuiProject {
   document: MkuiDocument;
   history: VersionIndex;
   archiveSizeBytes: number;
+  codegen?: CodegenBundle | null;
 }
 
 export interface SavedMkuiReceipt {
@@ -56,6 +58,7 @@ export async function saveMkuiWithDialog(
   doc: MkuiDocument,
   defaultFileName?: string,
   pendingHistory?: PendingHistoryPayload,
+  codegen?: CodegenBundle,
 ): Promise<SavedMkuiReceipt | null> {
   if (!isTauriRuntime()) {
     // 浏览器预览降级：下载 .json 调试文件并提示
@@ -72,18 +75,20 @@ export async function saveMkuiWithDialog(
   if (!targetPath) {
     return null;
   }
-  return saveMkuiAtPath(targetPath, doc, pendingHistory);
+  return saveMkuiAtPath(targetPath, doc, pendingHistory, codegen);
 }
 
 export async function saveMkuiAtPath(
   filePath: string,
   document: MkuiDocument,
   pendingHistory?: PendingHistoryPayload,
+  codegen?: CodegenBundle,
 ): Promise<SavedMkuiReceipt> {
   return invokeCommand<SavedMkuiReceipt>("project_save_mkui", {
     filePath,
     document,
     pendingHistory: pendingHistory ?? null,
+    codegen: codegen ?? null,
   });
 }
 

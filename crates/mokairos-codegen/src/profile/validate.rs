@@ -265,6 +265,39 @@ fn validate_symbol_ref(
     }
 }
 
+/// 解析 profile.toml 文本为 CodegenProfile（供前端打开 .mkui 时 100% 无损回显）
+pub fn parse_profile_toml(profile_toml: &str) -> crate::error::AppResult<CodegenProfile> {
+    Ok(toml::from_str(profile_toml)?)
+}
+
+/// 解析 profile.toml 文本并联合文档与代码文件执行全量校验
+pub fn validate_profile_toml_and_code(
+    profile_toml: &str,
+    doc: &MkuiDocument,
+    code_files: &std::collections::BTreeMap<String, String>,
+) -> Vec<Diagnostic> {
+    let profile: CodegenProfile = match toml::from_str(profile_toml) {
+        Ok(p) => p,
+        Err(err) => {
+            return vec![Diagnostic::error(
+                "PROFILE_TOML_SYNTAX",
+                "codegen/profile.toml",
+                format!("TOML 解析失败: {err}"),
+            )];
+        }
+    };
+    let mut diags = validate_profile(&profile, doc);
+    for (path, content) in code_files {
+        let parsed = crate::codefile::parse_c_file(
+            path,
+            &crate::archive::pack::normalize_lf(content),
+            &profile.prefix,
+        );
+        diags.extend(parsed.diagnostics);
+    }
+    diags
+}
+
 /// 校验完整 `CodegenProfile` 与设计文档之间的兼容性与陷阱
 pub fn validate_profile(profile: &CodegenProfile, doc: &MkuiDocument) -> Vec<Diagnostic> {
     let mut diags = Vec::new();

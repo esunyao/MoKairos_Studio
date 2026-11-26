@@ -6,6 +6,7 @@ import {
 } from "@/domain/templates/starterTemplates";
 import { useAppStore } from "@/stores/useAppStore";
 import { useCanvasStore } from "@/stores/useCanvasStore";
+import { useCodegenStore } from "@/stores/useCodegenStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
 import { useProjectStore } from "@/stores/useProjectStore";
 import { useSimulatorStore } from "@/stores/useSimulatorStore";
@@ -41,6 +42,7 @@ export async function createNewProjectFromWizard(params: {
     useCanvasStore.getState().clearSelection();
     useVersionStore.getState().resetHistory();
     useSimulatorStore.getState().resetOverrides();
+    useCodegenStore.getState().resetToDefault();
     await useProjectStore.getState().markOpened({ filePath: null, doc });
     useAppStore.getState().setView(params.targetView ?? "design");
     toast.success(`已创建工程「${doc.name}」`, {
@@ -63,6 +65,7 @@ export async function openProjectWithDialog(): Promise<void> {
       useCanvasStore.getState().clearSelection();
       useVersionStore.getState().setVersionHistory(opened.history);
       useSimulatorStore.getState().resetOverrides();
+      await useCodegenStore.getState().loadFromArchive(opened.codegen);
       await useProjectStore.getState().markOpened({
         filePath: opened.filePath,
         doc: opened.document,
@@ -95,6 +98,7 @@ export async function openProjectByPath(filePath: string): Promise<void> {
       useCanvasStore.getState().clearSelection();
       useVersionStore.getState().setVersionHistory(opened.history);
       useSimulatorStore.getState().resetOverrides();
+      await useCodegenStore.getState().loadFromArchive(opened.codegen);
       await useProjectStore.getState().markOpened({
         filePath: opened.filePath,
         doc: opened.document,
@@ -126,16 +130,18 @@ export async function saveCurrentProject(saveAs = false): Promise<boolean> {
       version.index.commits.length > 0
         ? { index: version.index, snapshots: version.memorySnapshots }
         : undefined;
+    const codegenBundle = useCodegenStore.getState().toBundle();
 
     const receipt =
       !saveAs && project.filePath
-        ? await saveMkuiAtPath(project.filePath, doc, pendingHistory)
-        : await saveMkuiWithDialog(doc, doc.name, pendingHistory);
+        ? await saveMkuiAtPath(project.filePath, doc, pendingHistory, codegenBundle)
+        : await saveMkuiWithDialog(doc, doc.name, pendingHistory, codegenBundle);
 
     if (!receipt) {
       return false;
     }
 
+    useCodegenStore.getState().markSaved();
     await project.markSaved({
       filePath: receipt.filePath,
       doc,
@@ -168,6 +174,7 @@ export async function importRmuiProject(): Promise<void> {
       useCanvasStore.getState().clearSelection();
       useVersionStore.getState().resetHistory();
       useSimulatorStore.getState().resetOverrides();
+      useCodegenStore.getState().resetToDefault();
       await useProjectStore.getState().markOpened({
         filePath: null,
         doc: res.document,
