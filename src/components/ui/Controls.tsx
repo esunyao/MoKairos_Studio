@@ -85,13 +85,14 @@ export function SimpleSelect({
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}
-          className="z-[70] min-w-[var(--radix-select-trigger-width)] focus:outline-none"
+          className="z-[70] min-w-[var(--radix-select-trigger-width)] rounded-[10px] bg-[var(--mk-surface-std-elevated-bg)] shadow-xl focus:outline-none"
         >
           <LiquidGlassSurface
             cornerRadius={10}
             elastic={false}
             lightweight={true}
-            contentClassName="p-1 text-xs text-[var(--mk-text-primary)]"
+            className="shadow-xl"
+            contentClassName="p-1 text-xs text-[var(--mk-text-primary)] rounded-[10px] bg-[var(--mk-surface-std-elevated-bg)]"
           >
             <SelectPrimitive.Viewport>
               {options.map((opt) => (

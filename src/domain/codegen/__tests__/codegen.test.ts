@@ -6,7 +6,14 @@ import {
   flowNodeRuntimeKey,
 } from "../flowCanvasState";
 import { validateFlowEdgeCandidate } from "../nodeRegistry";
-import { createDefaultProfile, serializeProfileToToml } from "../profileSerializer";
+import {
+  createDefaultProfile,
+  parseCFileFallback,
+  serializeProfileToToml,
+  sliceUtf8Bytes,
+  upsertCodeNodeFallback,
+  validateProfileLightweight,
+} from "../profileSerializer";
 import { collectGraphicTargetOptions, type FlowGraph } from "../types";
 import { createDocumentFromTemplate } from "@/domain/templates/starterTemplates";
 
@@ -197,5 +204,32 @@ describe("codegen profile & graph helpers", () => {
     expect(rmRes.shouldMutateGraph).toBe(true);
     expect(rmRes.nextRfEdges).toEqual([]);
     expect(rmRes.nextSelectedEdgeIds.size).toBe(0);
+  });
+
+  it("slices UTF-8 byte offsets accurately with Chinese comments and quotes non-ASCII flow IDs", () => {
+    const cSrc = `/* 中文注释 */\nfloat mk_test(float x) {\n    return x * 2.0f;\n}\n`;
+    const parsed = parseCFileFallback("nodes.c", cSrc, "mk_hud");
+    expect(parsed.functions).toHaveLength(1);
+    const body = sliceUtf8Bytes(
+      cSrc,
+      parsed.functions[0].bodyStartByte,
+      parsed.functions[0].bodyEndByte,
+    );
+    expect(body).toContain("return x * 2.0f;");
+
+    const upserted = upsertCodeNodeFallback("nodes.c", cSrc, "mk_hud", {
+      name: "mk_test",
+      originalName: "mk_test",
+      returnType: "int32",
+      params: [{ name: "n", type: "int32" }],
+      body: "return n + 1;",
+    });
+    expect(upserted.parsed.functions[0].portReturn).toBe("int32");
+
+    const p = createDefaultProfile();
+    p.prefix = "";
+    p.flows = { "主流程 1": { nodes: [], edges: [] } };
+    expect(serializeProfileToToml(p)).toContain('[flows."主流程 1"]');
+    expect(validateProfileLightweight(p).some((d) => d.code === "PROFILE_INVALID_PREFIX")).toBe(true);
   });
 });

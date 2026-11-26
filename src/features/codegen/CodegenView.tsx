@@ -41,7 +41,9 @@ export function CodegenView() {
   const previewFiles = useCodegenStore((s) => s.previewFiles);
   const previewDiagnostics = useCodegenStore((s) => s.previewDiagnostics);
 
-  const [codeJump, setCodeJump] = useState<{ file: string; line?: number } | null>(null);
+  const [codeJump, setCodeJump] = useState<{ file: string; line?: number; nonce: number } | null>(
+    null,
+  );
 
   useEffect(() => {
     void bootstrapMetadata();
@@ -59,7 +61,7 @@ export function CodegenView() {
   );
 
   const handleOpenCodeFile = (file: string, line?: number) => {
-    setCodeJump({ file, line });
+    setCodeJump((prev) => ({ file, line, nonce: (prev?.nonce ?? 0) + 1 }));
     setActiveSubTab("code");
   };
 
@@ -138,7 +140,11 @@ export function CodegenView() {
           <FlowTab onOpenCodeFile={(file, line) => handleOpenCodeFile(file, line)} />
         )}
         {activeSubTab === "code" && (
-          <CodeTab initialFile={codeJump?.file} initialLine={codeJump?.line} />
+          <CodeTab
+            initialFile={codeJump?.file}
+            initialLine={codeJump?.line}
+            jumpNonce={codeJump?.nonce}
+          />
         )}
         {activeSubTab === "export" && (
           <ExportTab onJumpToCode={(file, line) => handleOpenCodeFile(file, line)} />

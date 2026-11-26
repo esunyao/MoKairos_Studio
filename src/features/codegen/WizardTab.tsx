@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Check, Cpu, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronDown, Cpu, Plus, Sparkles, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SimpleSelect, Switch } from "@/components/ui/Controls";
 import { Badge, Input } from "@/components/ui/Primitives";
@@ -9,11 +9,13 @@ import type {
   CodegenProfile,
   FlowValueType,
   ModeOrRef,
+  ProfileTextEncoding,
   SymbolDecl,
   SymbolLang,
   SymbolRef,
 } from "@/domain/codegen/types";
 import { useCodegenStore } from "@/stores/useCodegenStore";
+import { useDocumentStore } from "@/stores/useDocumentStore";
 
 /**
  * 配置向导子页：官方预设（轮椅）、模式/通道配置、用户符号目录与 Runtime/Transport SymbolRef 映射
@@ -34,8 +36,29 @@ function SymbolRefEditor({
   allowOptional?: boolean;
   onChange: (next: SymbolRef | undefined) => void;
 }) {
-  const cur: SymbolRef = value ?? { expr: "", lang: "cpp", optional: allowOptional };
-  const useSymbolMode = cur.symbol !== undefined && cur.symbol !== "" && !cur.expr;
+  const [modeState, setModeState] = useState<"expr" | "symbol">(() =>
+    value?.symbol && !value?.expr ? "symbol" : "expr",
+  );
+  const [langState, setLangState] = useState<SymbolLang>(() => value?.lang ?? "cpp");
+
+  useEffect(() => {
+    if (value?.symbol && !value.expr) {
+      setModeState("symbol");
+    } else if (value?.expr) {
+      setModeState("expr");
+    }
+    if (value?.lang) {
+      setLangState(value.lang);
+    }
+  }, [value?.symbol, value?.expr, value?.lang]);
+
+  const cur: SymbolRef = value ?? {
+    expr: modeState === "expr" ? "" : undefined,
+    symbol: modeState === "symbol" ? "" : undefined,
+    lang: langState,
+    optional: allowOptional,
+  };
+  const useSymbolMode = modeState === "symbol";
 
   const update = (patch: Partial<SymbolRef>) => {
     const merged: SymbolRef = { ...cur, ...patch };
@@ -62,24 +85,30 @@ function SymbolRefEditor({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={() =>
-              update({
-                lang: cur.lang === "cpp" ? "c" : "cpp",
-              })
-            }
+            onClick={() => {
+              const nextLang: SymbolLang = langState === "cpp" ? "c" : "cpp";
+              setLangState(nextLang);
+              if (value || !allowOptional) {
+                update({ lang: nextLang });
+              }
+            }}
             className="rounded px-2 py-0.5 text-[11px] font-mono border border-[var(--mk-border-strong)] bg-[var(--mk-bg-panel)] text-[var(--mk-text-secondary)] hover:text-[var(--mk-text-primary)] cursor-pointer"
           >
-            {cur.lang === "cpp" ? "C++" : "C"}
+            {langState === "cpp" ? "C++" : "C"}
           </button>
           <button
             type="button"
-            onClick={() =>
-              update(
-                useSymbolMode
-                  ? { expr: cur.symbol ?? "", symbol: undefined }
-                  : { symbol: cur.expr ?? "", expr: undefined },
-              )
-            }
+            onClick={() => {
+              const nextMode = useSymbolMode ? "expr" : "symbol";
+              setModeState(nextMode);
+              if (value || !allowOptional) {
+                update(
+                  nextMode === "expr"
+                    ? { expr: cur.symbol ?? cur.expr ?? "", symbol: undefined }
+                    : { symbol: cur.expr ?? cur.symbol ?? "", expr: undefined },
+                );
+              }
+            }}
             className="rounded px-2 py-0.5 text-[11px] border border-[var(--mk-border-subtle)] text-[var(--mk-text-secondary)] hover:text-[var(--mk-text-primary)] cursor-pointer"
           >
             {useSymbolMode ? "切换为 expr" : "切换为 symbol"}
@@ -89,11 +118,11 @@ function SymbolRefEditor({
 
       <Input
         value={useSymbolMode ? (cur.symbol ?? "") : (cur.expr ?? "")}
-        placeholder={placeholderExpr}
+        placeholder={useSymbolMode ? "填写已有函数或变量名（如 ::g_var）" : placeholderExpr}
         onChange={(e) =>
           useSymbolMode
-            ? update({ symbol: e.target.value, expr: undefined })
-            : update({ expr: e.target.value, symbol: undefined })
+            ? update({ symbol: e.target.value, expr: undefined, lang: langState })
+            : update({ expr: e.target.value, symbol: undefined, lang: langState })
         }
         className="font-mono text-[11px]"
       />
@@ -117,6 +146,7 @@ function SymbolRefEditor({
 }
 
 export function WizardTab() {
+  const doc = useDocumentStore((s) => s.doc);
   const profile = useCodegenStore((s) => s.profile);
   const builtinPresets = useCodegenStore((s) => s.builtinPresets);
   const applyPreset = useCodegenStore((s) => s.applyPreset);
@@ -128,6 +158,7 @@ export function WizardTab() {
   const [newSymExpr, setNewSymExpr] = useState("");
   const [newSymInc, setNewSymInc] = useState("");
   const [newSymLang, setNewSymLang] = useState<SymbolLang>("cpp");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const handleAddSymbol = () => {
     const id = newSymId.trim();
@@ -170,7 +201,7 @@ export function WizardTab() {
   };
 
   return (
-    <div className="h-full overflow-y-auto p-5 space-y-6">
+    <div className="h-full w-full flex-1 overflow-y-auto p-5 pb-16 space-y-6">
       {/* 第 1 步：官方轮椅预设 */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -404,15 +435,14 @@ export function WizardTab() {
                       </button>
                     </div>
                     {typeof profile.transport.crc8 !== "string" && (
-                      <Input
-                        value={profile.transport.crc8?.expr ?? ""}
-                        onChange={(e) =>
-                          setTransportModeRef("crc8", {
-                            ...(profile.transport.crc8 as SymbolRef),
-                            expr: e.target.value,
-                          })
+                      <SymbolRefEditor
+                        title="外部 CRC8 实现"
+                        hint="可用占位符：{buf}、{len}"
+                        value={profile.transport.crc8}
+                        placeholderExpr="append_crc8_check_sum({buf}, {len})"
+                        onChange={(next) =>
+                          setTransportModeRef("crc8", next ?? "builtin")
                         }
-                        className="font-mono text-[11px]"
                       />
                     )}
                   </div>
@@ -435,15 +465,14 @@ export function WizardTab() {
                       </button>
                     </div>
                     {typeof profile.transport.crc16 !== "string" && (
-                      <Input
-                        value={profile.transport.crc16?.expr ?? ""}
-                        onChange={(e) =>
-                          setTransportModeRef("crc16", {
-                            ...(profile.transport.crc16 as SymbolRef),
-                            expr: e.target.value,
-                          })
+                      <SymbolRefEditor
+                        title="外部 CRC16 实现"
+                        hint="可用占位符：{buf}、{len}"
+                        value={profile.transport.crc16}
+                        placeholderExpr="append_crc16_check_sum({buf}, {len})"
+                        onChange={(next) =>
+                          setTransportModeRef("crc16", next ?? "builtin")
                         }
-                        className="font-mono text-[11px]"
                       />
                     )}
                   </div>
@@ -602,6 +631,145 @@ export function WizardTab() {
           </p>
         </section>
       )}
+
+      {/* 第 4 步：高级运行时、帧与编码选项（折叠面板） */}
+      <section className="rounded-[var(--mk-radius-md)] border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-panel)]">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-semibold text-[var(--mk-text-primary)] cursor-pointer hover:bg-[var(--mk-bg-surface)]/50 rounded-[var(--mk-radius-md)]"
+        >
+          <span>4. 高级运行时钩子、文字编码与导出画面过滤</span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-[var(--mk-text-muted)] transition-transform",
+              advancedOpen && "rotate-180",
+            )}
+          />
+        </button>
+
+        {advancedOpen && (
+          <div className="border-t border-[var(--mk-border-subtle)] p-4 space-y-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">文字编码 (text_encoding)</label>
+                <SimpleSelect
+                  value={profile.text_encoding}
+                  onValueChange={(val) =>
+                    updateProfile((p) => ({ ...p, text_encoding: val as ProfileTextEncoding }))
+                  }
+                  options={[
+                    { value: "utf8", label: "UTF-8（推荐，兼容 2027 裁判系统）" },
+                    { value: "utf16le", label: "UTF-16LE（宽字符）" },
+                  ]}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">最大单帧字节 (max_frame)</label>
+                <Input
+                  type="number"
+                  min={32}
+                  max={256}
+                  value={profile.transport.max_frame ?? 128}
+                  onChange={(e) =>
+                    updateProfile((p) => ({
+                      ...p,
+                      transport: {
+                        ...p.transport,
+                        max_frame: Math.max(32, Math.min(256, Number(e.target.value) || 128)),
+                      },
+                    }))
+                  }
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">启动默认画面 (start_frame)</label>
+                <SimpleSelect
+                  value={profile.start_frame ?? "__auto__"}
+                  onValueChange={(val) =>
+                    updateProfile((p) => ({
+                      ...p,
+                      start_frame: val === "__auto__" ? undefined : val,
+                    }))
+                  }
+                  options={[
+                    { value: "__auto__", label: "默认首个画面" },
+                    ...doc.frames.map((f) => ({ value: f.name, label: f.name })),
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <div className="text-[11px] text-[var(--mk-text-secondary)]">
+                导出画面过滤（不勾选任何项表示导出全部 {doc.frames.length} 个画面）：
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {doc.frames.map((f) => {
+                  const selected = profile.frames.includes(f.name);
+                  return (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() =>
+                        updateProfile((p) => ({
+                          ...p,
+                          frames: selected
+                            ? p.frames.filter((name) => name !== f.name)
+                            : [...p.frames, f.name],
+                        }))
+                      }
+                      className={cn(
+                        "rounded-[var(--mk-radius-sm)] border px-2.5 py-1 text-xs cursor-pointer transition-colors",
+                        selected
+                          ? "border-[var(--mk-accent-primary)] bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)] font-medium"
+                          : "border-[var(--mk-border-subtle)] bg-[var(--mk-bg-surface)] text-[var(--mk-text-secondary)]",
+                      )}
+                    >
+                      {f.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {profile.mode === "mapping" && (
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                <SymbolRefEditor
+                  title="runtime.port_ready（可选）"
+                  hint="返回非 0 允许发送，0 则延迟本轮"
+                  value={profile.runtime.port_ready}
+                  placeholderExpr="BOARD_UART2.gState == HAL_UART_STATE_READY"
+                  allowOptional
+                  onChange={(next) =>
+                    updateProfile((p) => ({ ...p, runtime: { ...p.runtime, port_ready: next } }))
+                  }
+                />
+                <SymbolRefEditor
+                  title="runtime.lock（可选临界区加锁）"
+                  hint="例如 FreeRTOS taskENTER_CRITICAL()"
+                  value={profile.runtime.lock}
+                  placeholderExpr="taskENTER_CRITICAL()"
+                  allowOptional
+                  onChange={(next) =>
+                    updateProfile((p) => ({ ...p, runtime: { ...p.runtime, lock: next } }))
+                  }
+                />
+                <SymbolRefEditor
+                  title="runtime.unlock（可选临界区解锁）"
+                  hint="例如 FreeRTOS taskEXIT_CRITICAL()"
+                  value={profile.runtime.unlock}
+                  placeholderExpr="taskEXIT_CRITICAL()"
+                  allowOptional
+                  onChange={(next) =>
+                    updateProfile((p) => ({ ...p, runtime: { ...p.runtime, unlock: next } }))
+                  }
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

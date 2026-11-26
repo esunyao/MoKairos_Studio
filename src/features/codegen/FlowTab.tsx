@@ -8,6 +8,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   addEdge,
+  useReactFlow,
   useUpdateNodeInternals,
   type Connection,
   type Edge,
@@ -19,7 +20,9 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   Code2,
+  Copy,
   Cpu,
+  Maximize2,
   Plus,
   Sparkles,
   Trash2,
@@ -27,7 +30,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ContextMenu, type ContextMenuState } from "@/components/ui/ContextMenu";
-import { SimpleSelect } from "@/components/ui/Controls";
+import { SimpleSelect, Switch } from "@/components/ui/Controls";
 import { Badge, Input } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
 import { toast } from "@/components/ui/toast";
@@ -51,6 +54,7 @@ import {
   type FlowNode,
   type FlowValueType,
 } from "@/domain/codegen/types";
+import { sliceUtf8Bytes } from "@/domain/codegen/profileSerializer";
 import { useCodefileSync } from "@/hooks/useCodefileSync";
 import { useAppStore } from "@/stores/useAppStore";
 import { useCodegenStore } from "@/stores/useCodegenStore";
@@ -147,6 +151,73 @@ function MokairosFlowNodeCard({ data, selected }: NodeProps<Node<FlowNodeRenderD
 
 const NODE_TYPES = { mokairos: MokairosFlowNodeCard };
 
+const FLOW_COLOR_OPTIONS = [
+  { value: "team", label: "主色 (team)" },
+  { value: "yellow", label: "黄色 (yellow)" },
+  { value: "green", label: "绿色 (green)" },
+  { value: "orange", label: "橙色 (orange)" },
+  { value: "purple", label: "紫色 (purple)" },
+  { value: "pink", label: "粉色 (pink)" },
+  { value: "cyan", label: "青色 (cyan)" },
+  { value: "black", label: "黑色 (black)" },
+  { value: "white", label: "白色 (white)" },
+] as const;
+
+/** 允许完整输入小数点与负号（如 "3."、"-0.5"）的受控数值输入框 */
+function NumericParamInput({
+  value,
+  integer = false,
+  onCommit,
+  className,
+}: {
+  value: number;
+  integer?: boolean;
+  onCommit: (next: number) => void;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string>(() => String(value));
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) {
+      setDraft(String(value));
+    }
+  }, [value, focused]);
+
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={draft}
+      className={cn("font-mono", className)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => {
+        setFocused(false);
+        const trimmed = draft.trim();
+        const num = integer ? Number.parseInt(trimmed, 10) : Number.parseFloat(trimmed);
+        if (Number.isFinite(num)) {
+          setDraft(String(num));
+          onCommit(num);
+        } else {
+          setDraft(String(value));
+        }
+      }}
+      onChange={(e) => {
+        const raw = e.target.value;
+        setDraft(raw);
+        const trimmed = raw.trim();
+        if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-." || trimmed.endsWith(".")) {
+          return;
+        }
+        const num = integer ? Number.parseInt(trimmed, 10) : Number.parseFloat(trimmed);
+        if (Number.isFinite(num)) {
+          onCommit(num);
+        }
+      }}
+    />
+  );
+}
+
 function nodeDisplayMeta(node: FlowNode): { title: string; subtitle: string } {
   if (node.label) {
     return { title: node.label, subtitle: node.ref ?? "" };
@@ -180,13 +251,16 @@ function FlowTabInner({
   onOpenCodeFile?: (file: string, line?: number) => void;
 }) {
   const theme = useAppStore((s) => s.theme);
+  const { fitView } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   const doc = useDocumentStore((s) => s.doc);
   const profile = useCodegenStore((s) => s.profile);
   const activeFlowId = useCodegenStore((s) => s.activeFlowId);
   const setActiveFlowId = useCodegenStore((s) => s.setActiveFlowId);
+  const setActiveSubTab = useCodegenStore((s) => s.setActiveSubTab);
   const ensureFlowExists = useCodegenStore((s) => s.ensureFlowExists);
-  const updateFlowGraph = useCodegenStore((s) => s.updateFlowGraph);
+  const deleteFlowGraph = useCodegenStore((s) => s.deleteFlowGraph);
+  const mutateFlowGraph = useCodegenStore((s) => s.mutateFlowGraph);
   const parsedFiles = useCodegenStore((s) => s.parsedFiles);
   const codeFiles = useCodegenStore((s) => s.codeFiles);
   const previewDiagnostics = useCodegenStore((s) => s.previewDiagnostics);
@@ -197,6 +271,7 @@ function FlowTabInner({
   const [runtimeMeta, setRuntimeMeta] = useState<Record<string, NodeRuntimeMeta>>({});
   const [newFlowName, setNewFlowName] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [jsonDraft, setJsonDraft] = useState("");
 
   // 新建/编辑代码节点弹窗式面板状态
   const [codeModalOpen, setCodeModalOpen] = useState(false);
@@ -309,10 +384,9 @@ function FlowTabInner({
 
   const mutateGraph = useCallback(
     (updater: (g: FlowGraph) => FlowGraph) => {
-      const base = profile.flows[effectiveFlowId] ?? { nodes: [], edges: [] };
-      updateFlowGraph(effectiveFlowId, updater(base));
+      mutateFlowGraph(effectiveFlowId, updater);
     },
-    [profile.flows, effectiveFlowId, updateFlowGraph],
+    [effectiveFlowId, mutateFlowGraph],
   );
 
   const onNodesChange: OnNodesChange<Node<FlowNodeRenderData>> = useCallback(
@@ -418,14 +492,85 @@ function FlowTabInner({
   };
 
   const selectedNode = currentGraph.nodes.find((n) => n.id === selectedNodeId) ?? null;
+  const selectedEdges = rfEdges.filter((e) => selectedEdgeIds.has(e.id));
+
+  useEffect(() => {
+    if (selectedNode) {
+      setJsonDraft(JSON.stringify(selectedNode.params, null, 2));
+    } else {
+      setJsonDraft("");
+    }
+  }, [selectedNode?.id, selectedNode?.params]);
+
+  const deleteSelectedNodeOrEdges = useCallback(() => {
+    if (selectedNodeId) {
+      const targetId = selectedNodeId;
+      mutateGraph((g) => ({
+        ...g,
+        nodes: g.nodes.filter((n) => n.id !== targetId),
+        edges: g.edges.filter(
+          (edge) =>
+            edge.from.split(".")[0] !== targetId &&
+            edge.to.split(".")[0] !== targetId,
+        ),
+      }));
+      setRuntimeMeta((prev) => {
+        const key = flowNodeRuntimeKey(effectiveFlowId, targetId);
+        if (prev[key] === undefined) return prev;
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+      setSelectedNodeId(null);
+      return true;
+    }
+    if (selectedEdgeIds.size > 0) {
+      const edgeIds = new Set(selectedEdgeIds);
+      const remaining = rfEdges.filter((e) => !edgeIds.has(e.id));
+      mutateGraph((g) => ({
+        ...g,
+        edges: remaining.map((e) => ({
+          id: e.id,
+          from: `${e.source}.${e.sourceHandle || "out"}`,
+          to: `${e.target}.${e.targetHandle || "in"}`,
+        })),
+      }));
+      setSelectedEdgeIds(new Set());
+      return true;
+    }
+    return false;
+  }, [selectedNodeId, selectedEdgeIds, rfEdges, effectiveFlowId, mutateGraph]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (codeModalOpen) return;
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      const target = e.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable ||
+          Boolean(target.closest(".monaco-editor")))
+      ) {
+        return;
+      }
+      if (deleteSelectedNodeOrEdges()) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [codeModalOpen, deleteSelectedNodeOrEdges]);
 
   const openCodeEditorForFunction = (fnName?: string) => {
     const existing = fnName ? codeFunctionsMap[fnName] : undefined;
     if (existing) {
-      // 从所属文件截取花括号内部源码
+      // 按 UTF-8 字节偏移从所属文件截取花括号内部源码
       let extractedBody = "return 0;";
       for (const content of Object.values(codeFiles)) {
-        const slice = content.slice(existing.bodyStartByte, existing.bodyEndByte);
+        const slice = sliceUtf8Bytes(content, existing.bodyStartByte, existing.bodyEndByte);
         if (slice.startsWith("{") && slice.endsWith("}")) {
           extractedBody = slice.slice(1, -1).replace(/^\r?\n/, "").replace(/\r?\n$/, "");
           break;
@@ -478,14 +623,14 @@ function FlowTabInner({
         }));
         window.requestAnimationFrame(() => updateNodeInternals(targetId));
       }
+      setCodeModalOpen(false);
     }
-    setCodeModalOpen(false);
   };
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden">
       {/* 左栏：组件与节点库 */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--mk-border-subtle)] bg-[var(--mk-bg-panel)]">
+      <aside className="flex w-64 shrink-0 flex-col overflow-hidden border-r border-[var(--mk-border-subtle)] bg-[var(--mk-bg-panel)]">
         <div className="border-b border-[var(--mk-border-subtle)] p-2.5 space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold">
             <span className="flex items-center gap-1.5">
@@ -494,30 +639,47 @@ function FlowTabInner({
             </span>
             <Badge tone="neutral">{profile.mode}</Badge>
           </div>
-          <div className="flex gap-1.5">
-            <SimpleSelect
-              value={effectiveFlowId}
-              onValueChange={setActiveFlowId}
-              options={(flowIds.length > 0 ? flowIds : ["main"]).map((id) => ({
-                value: id,
-                label: id,
-              }))}
-            />
+          <div className="flex items-center gap-1.5">
+            <div className="min-w-0 flex-1">
+              <SimpleSelect
+                value={effectiveFlowId}
+                onValueChange={setActiveFlowId}
+                options={(flowIds.length > 0 ? flowIds : ["main"]).map((id) => ({
+                  value: id,
+                  label: id,
+                }))}
+              />
+            </div>
+            {flowIds.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0"
+                onClick={() => deleteFlowGraph(effectiveFlowId)}
+                title="删除当前流程"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-[var(--mk-status-error)]" />
+              </Button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
             <Input
               value={newFlowName}
               onChange={(e) => setNewFlowName(e.target.value)}
-              placeholder="新流程名"
-              className="w-24 text-[11px]"
+              placeholder="新建流程名..."
+              className="min-w-0 flex-1 text-[11px]"
             />
             <Button
               variant="secondary"
               size="sm"
+              className="shrink-0"
               onClick={() => {
                 const name = newFlowName.trim();
                 if (!name) return;
                 ensureFlowExists(name);
                 setNewFlowName("");
               }}
+              title="新增流程"
             >
               <Plus className="h-3.5 w-3.5" />
             </Button>
@@ -548,6 +710,14 @@ function FlowTabInner({
               >
                 <span className="font-medium text-[var(--mk-text-primary)]">+ 公开 API 入口节点</span>
                 <Cpu className="h-3.5 w-3.5 text-[var(--mk-accent-primary)]" />
+              </button>
+            ) : profile.symbols.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setActiveSubTab("wizard")}
+                className="w-full rounded-[var(--mk-radius-sm)] border border-dashed border-[var(--mk-border-strong)] px-2 py-1.5 text-left text-[11px] text-[var(--mk-text-muted)] hover:border-[var(--mk-accent-primary)] hover:text-[var(--mk-accent-primary)] cursor-pointer"
+              >
+                尚未声明用户符号 → 点击前往「配置向导」添加
               </button>
             ) : (
               profile.symbols.map((sym) => (
@@ -670,21 +840,101 @@ function FlowTabInner({
           nodes={rfNodes}
           edges={rfEdges}
           nodeTypes={NODE_TYPES}
+          deleteKeyCode={["Backspace", "Delete"]}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+          onNodeClick={(_, node) => {
+            setSelectedNodeId(node.id);
+            setSelectedEdgeIds(new Set());
+          }}
+          onEdgeClick={(_, edge) => {
+            setSelectedNodeId(null);
+            setSelectedEdgeIds(new Set([edge.id]));
+          }}
           onPaneClick={() => {
             setSelectedNodeId(null);
             setSelectedEdgeIds(new Set());
           }}
-          onNodeContextMenu={(e, node) => {
+          onPaneContextMenu={(e) => {
             e.preventDefault();
-            setSelectedNodeId(node.id);
+            e.stopPropagation();
             setContextMenu({
               x: e.clientX,
               y: e.clientY,
               items: [
+                {
+                  id: "fit_flow",
+                  label: "适应画布视口",
+                  icon: <Maximize2 className="h-3.5 w-3.5" />,
+                  onSelect: () => void fitView({ padding: 0.2 }),
+                },
+              ],
+            });
+          }}
+          onEdgeContextMenu={(e, edge) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedNodeId(null);
+            setSelectedEdgeIds(new Set([edge.id]));
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              items: [
+                {
+                  id: "del_edge",
+                  label: "删除连线",
+                  danger: true,
+                  shortcut: "Del",
+                  icon: <Trash2 className="h-3.5 w-3.5" />,
+                  onSelect: () => {
+                    const remaining = rfEdges.filter((item) => item.id !== edge.id);
+                    mutateGraph((g) => ({
+                      ...g,
+                      edges: remaining.map((item) => ({
+                        id: item.id,
+                        from: `${item.source}.${item.sourceHandle || "out"}`,
+                        to: `${item.target}.${item.targetHandle || "in"}`,
+                      })),
+                    }));
+                    setSelectedEdgeIds(new Set());
+                  },
+                },
+              ],
+            });
+          }}
+          onNodeContextMenu={(e, node) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setSelectedNodeId(node.id);
+            setSelectedEdgeIds(new Set());
+            setContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              items: [
+                {
+                  id: "dup_node",
+                  label: "复制节点",
+                  icon: <Copy className="h-3.5 w-3.5" />,
+                  onSelect: () => {
+                    const src = node.data.flowNode;
+                    const newId = `n_${Date.now().toString(36).slice(-4)}${Math.floor(Math.random() * 90 + 10)}`;
+                    const basePos = src.position ?? [120, 120];
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: [
+                        ...g.nodes,
+                        {
+                          ...src,
+                          id: newId,
+                          params: JSON.parse(JSON.stringify(src.params ?? {})) as Record<string, unknown>,
+                          position: [basePos[0] + 40, basePos[1] + 40],
+                        },
+                      ],
+                    }));
+                    setSelectedNodeId(newId);
+                  },
+                },
                 ...(node.data.flowNode.kind === "code_fn"
                   ? [
                       {
@@ -719,6 +969,7 @@ function FlowTabInner({
                   id: "del_node",
                   label: "删除节点",
                   danger: true,
+                  shortcut: "Del",
                   icon: <Trash2 className="h-3.5 w-3.5" />,
                   onSelect: () => {
                     mutateGraph((g) => ({
@@ -730,6 +981,13 @@ function FlowTabInner({
                           edge.to.split(".")[0] !== node.id,
                       ),
                     }));
+                    setRuntimeMeta((prev) => {
+                      const key = flowNodeRuntimeKey(effectiveFlowId, node.id);
+                      if (prev[key] === undefined) return prev;
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
+                    });
                     if (selectedNodeId === node.id) setSelectedNodeId(null);
                   },
                 },
@@ -860,15 +1118,40 @@ function FlowTabInner({
         )}
       </div>
 
-      {/* 右栏：选中节点属性检视器 */}
+      {/* 右栏：选中节点/连线属性检视器 */}
       <aside className="flex w-72 shrink-0 flex-col border-l border-[var(--mk-border-subtle)] bg-[var(--mk-bg-panel)] p-3.5 overflow-y-auto space-y-3">
         <div className="text-xs font-semibold text-[var(--mk-text-primary)]">
           节点属性与参数
         </div>
 
-        {!selectedNode ? (
+        {!selectedNode && selectedEdges.length > 0 ? (
+          <div className="space-y-3 text-xs">
+            <div className="flex items-center justify-between">
+              <Badge tone="accent">edge 连线</Badge>
+              <span className="font-mono text-[10px] text-[var(--mk-text-muted)]">
+                共 {selectedEdges.length} 条
+              </span>
+            </div>
+            <div className="rounded-[var(--mk-radius-sm)] border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-surface)] p-2.5 space-y-1 font-mono text-[11px] text-[var(--mk-text-secondary)]">
+              {selectedEdges.map((edge) => (
+                <div key={edge.id} className="truncate">
+                  {edge.source}.{edge.sourceHandle || "out"} → {edge.target}.{edge.targetHandle || "in"}
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="danger"
+              size="sm"
+              className="w-full"
+              onClick={() => void deleteSelectedNodeOrEdges()}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              删除选中连线 (Del)
+            </Button>
+          </div>
+        ) : !selectedNode ? (
           <div className="text-xs text-[var(--mk-text-muted)] leading-relaxed">
-            在画布上选中节点可配置参数、修改 API 入口签名或打开代码节点双向编辑器；右键节点可删除。
+            在画布上选中节点或连线可配置参数，支持 Delete / Backspace 删除或右键打开快捷菜单。
           </div>
         ) : (
           <div className="space-y-3 text-xs">
@@ -893,11 +1176,104 @@ function FlowTabInner({
                   <Code2 className="h-3.5 w-3.5" />
                   在 Monaco 中编辑代码节点
                 </Button>
+                {onOpenCodeFile && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      const fnName = selectedNode.ref;
+                      for (const [fp, parsed] of Object.entries(parsedFiles)) {
+                        const hit = parsed.functions.find((f) => f.name === fnName);
+                        if (hit) {
+                          onOpenCodeFile(fp, hit.startLine);
+                          return;
+                        }
+                      }
+                      onOpenCodeFile("nodes.c");
+                    }}
+                  >
+                    在纯代码编辑器中定位
+                  </Button>
+                )}
+              </div>
+            )}
+
+            {selectedNode.kind === "symbol_source" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">绑定用户符号</label>
+                {profile.symbols.length === 0 ? (
+                  <div className="text-[11px] text-[var(--mk-text-muted)]">
+                    当前无用户符号，请前往「配置向导」添加。
+                  </div>
+                ) : (
+                  <SimpleSelect
+                    value={String(selectedNode.ref ?? "").replace(/^symbol:/, "")}
+                    onValueChange={(val) => {
+                      const targetId = selectedNode.id;
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === targetId ? { ...n, ref: `symbol:${val}` } : n,
+                        ),
+                      }));
+                      window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                    }}
+                    options={profile.symbols.map((s) => ({
+                      value: s.id,
+                      label: `${s.id} (${s.type})`,
+                    }))}
+                  />
+                )}
+              </div>
+            )}
+
+            {selectedNode.kind === "session_state" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">运行时状态源</label>
+                <SimpleSelect
+                  value={selectedNode.ref ?? "is_ready"}
+                  onValueChange={(val) =>
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === selectedNode.id ? { ...n, ref: val } : n,
+                      ),
+                    }))
+                  }
+                  options={[
+                    { value: "is_ready", label: "is_ready（链路在线与就绪）" },
+                    { value: "robot_id", label: "robot_id（本机机器人 ID）" },
+                  ]}
+                />
+              </div>
+            )}
+
+            {selectedNode.kind === "graphic_sink" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">绑定图元目标字段</label>
+                <SimpleSelect
+                  value={selectedNode.ref ?? ""}
+                  onValueChange={(val) => {
+                    const targetId = selectedNode.id;
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === targetId ? { ...n, ref: val } : n,
+                      ),
+                    }));
+                    window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                  }}
+                  options={targetOptions.map((o) => ({
+                    value: o.target,
+                    label: `${o.label} [${o.valueType}]`,
+                  }))}
+                />
               </div>
             )}
 
             {selectedNode.kind === "api_entry" && (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <label className="block text-[11px] text-[var(--mk-text-secondary)]">
                   公开函数名（加前缀 {profile.prefix}_）
                 </label>
@@ -915,43 +1291,138 @@ function FlowTabInner({
                   }
                   className="font-mono"
                 />
-                <label className="block text-[11px] text-[var(--mk-text-secondary)]">分组注释</label>
-                <Input
-                  value={String(selectedNode.params.group ?? "hud")}
-                  onChange={(e) =>
-                    mutateGraph((g) => ({
-                      ...g,
-                      nodes: g.nodes.map((n) =>
-                        n.id === selectedNode.id
-                          ? { ...n, params: { ...n.params, group: e.target.value } }
-                          : n,
-                      ),
-                    }))
-                  }
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => {
-                    const targetId = selectedNode.id;
-                    const args = Array.isArray(selectedNode.params.args)
-                      ? [...(selectedNode.params.args as Array<{ name: string; type: FlowValueType }>)]
-                      : [];
-                    args.push({ name: `arg${args.length}`, type: "float" });
-                    mutateGraph((g) => ({
-                      ...g,
-                      nodes: g.nodes.map((n) =>
-                        n.id === targetId
-                          ? { ...n, params: { ...n.params, args } }
-                          : n,
-                      ),
-                    }));
-                    window.requestAnimationFrame(() => updateNodeInternals(targetId));
-                  }}
-                >
-                  + 添加接口参数
-                </Button>
+                <div className="grid grid-cols-2 gap-2 items-end">
+                  <div>
+                    <label className="block text-[11px] text-[var(--mk-text-secondary)]">分组注释</label>
+                    <Input
+                      value={String(selectedNode.params.group ?? "hud")}
+                      onChange={(e) =>
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, group: e.target.value } }
+                              : n,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                  <label className="flex items-center justify-between rounded border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-surface)] px-2 py-1 text-[11px]">
+                    <span>public</span>
+                    <Switch
+                      checked={selectedNode.params.public !== false}
+                      onCheckedChange={(checked) =>
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, public: checked } }
+                              : n,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-[11px] text-[var(--mk-text-secondary)]">接口参数列表</div>
+                  {(Array.isArray(selectedNode.params.args)
+                    ? (selectedNode.params.args as Array<{ name: string; type: FlowValueType }>)
+                    : []
+                  ).map((arg, idx, list) => (
+                    <div key={idx} className="flex items-center gap-1">
+                      <Input
+                        value={arg.name}
+                        className="h-7 flex-1 font-mono text-[11px]"
+                        onChange={(e) => {
+                          const targetId = selectedNode.id;
+                          const nextArgs = list.map((item, i) =>
+                            i === idx ? { ...item, name: e.target.value } : item,
+                          );
+                          mutateGraph((g) => ({
+                            ...g,
+                            nodes: g.nodes.map((n) =>
+                              n.id === targetId
+                                ? { ...n, params: { ...n.params, args: nextArgs } }
+                                : n,
+                            ),
+                          }));
+                          window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                        }}
+                      />
+                      <SimpleSelect
+                        value={arg.type}
+                        className="w-24"
+                        onValueChange={(v) => {
+                          const targetId = selectedNode.id;
+                          const nextArgs = list.map((item, i) =>
+                            i === idx ? { ...item, type: v as FlowValueType } : item,
+                          );
+                          mutateGraph((g) => ({
+                            ...g,
+                            nodes: g.nodes.map((n) =>
+                              n.id === targetId
+                                ? { ...n, params: { ...n.params, args: nextArgs } }
+                                : n,
+                            ),
+                          }));
+                          window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                        }}
+                        options={[
+                          { value: "float", label: "float" },
+                          { value: "int32", label: "int32" },
+                          { value: "bool", label: "bool" },
+                          { value: "color", label: "color" },
+                          { value: "text", label: "text" },
+                        ]}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          const targetId = selectedNode.id;
+                          const nextArgs = list.filter((_, i) => i !== idx);
+                          mutateGraph((g) => ({
+                            ...g,
+                            nodes: g.nodes.map((n) =>
+                              n.id === targetId
+                                ? { ...n, params: { ...n.params, args: nextArgs } }
+                                : n,
+                            ),
+                          }));
+                          window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                        }}
+                        title="删除参数"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-[var(--mk-status-error)]" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      const targetId = selectedNode.id;
+                      const args = Array.isArray(selectedNode.params.args)
+                        ? [...(selectedNode.params.args as Array<{ name: string; type: FlowValueType }>)]
+                        : [];
+                      args.push({ name: `arg${args.length}`, type: "float" });
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === targetId
+                            ? { ...n, params: { ...n.params, args } }
+                            : n,
+                        ),
+                      }));
+                      window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                    }}
+                  >
+                    + 添加接口参数
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -959,16 +1430,14 @@ function FlowTabInner({
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[11px] text-[var(--mk-text-secondary)]">比例 k</label>
-                  <Input
-                    type="number"
-                    step="0.1"
+                  <NumericParamInput
                     value={Number(selectedNode.params.k ?? 1)}
-                    onChange={(e) =>
+                    onCommit={(val) =>
                       mutateGraph((g) => ({
                         ...g,
                         nodes: g.nodes.map((n) =>
                           n.id === selectedNode.id
-                            ? { ...n, params: { ...n.params, k: Number(e.target.value) } }
+                            ? { ...n, params: { ...n.params, k: val } }
                             : n,
                         ),
                       }))
@@ -977,16 +1446,334 @@ function FlowTabInner({
                 </div>
                 <div>
                   <label className="text-[11px] text-[var(--mk-text-secondary)]">偏置 b</label>
-                  <Input
-                    type="number"
-                    step="0.1"
+                  <NumericParamInput
                     value={Number(selectedNode.params.b ?? 0)}
+                    onCommit={(val) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, b: val } }
+                            : n,
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedNode.kind === "clamp" && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[11px] text-[var(--mk-text-secondary)]">下限 lo</label>
+                  <NumericParamInput
+                    value={Number(selectedNode.params.lo ?? 0)}
+                    onCommit={(val) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, lo: val } }
+                            : n,
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-[var(--mk-text-secondary)]">上限 hi</label>
+                  <NumericParamInput
+                    value={Number(selectedNode.params.hi ?? 1)}
+                    onCommit={(val) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, hi: val } }
+                            : n,
+                        ),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedNode.kind === "remap" && (
+              <div className="grid grid-cols-2 gap-2">
+                {(
+                  [
+                    ["in_min", "输入下限"],
+                    ["in_max", "输入上限"],
+                    ["out_min", "输出下限"],
+                    ["out_max", "输出上限"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div key={key}>
+                    <label className="text-[11px] text-[var(--mk-text-secondary)]">{label}</label>
+                    <NumericParamInput
+                      value={Number(selectedNode.params[key] ?? 0)}
+                      onCommit={(val) =>
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, [key]: val } }
+                              : n,
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedNode.kind === "threshold_color" && (
+              <div className="space-y-2">
+                <div className="text-[11px] text-[var(--mk-text-secondary)]">阈值分段 (&gt;= 阈值 → 颜色)</div>
+                {(Array.isArray(selectedNode.params.steps)
+                  ? (selectedNode.params.steps as Array<[number, string]>)
+                  : []
+                ).map(([th, col], idx, arr) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <NumericParamInput
+                      value={Number(th ?? 0)}
+                      className="w-20"
+                      onCommit={(val) => {
+                        const nextSteps = arr.map((s, i) => (i === idx ? [val, s[1]] : s));
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, steps: nextSteps } }
+                              : n,
+                          ),
+                        }));
+                      }}
+                    />
+                    <SimpleSelect
+                      value={String(col ?? "green")}
+                      className="flex-1"
+                      onValueChange={(v) => {
+                        const nextSteps = arr.map((s, i) => (i === idx ? [s[0], v] : s));
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, steps: nextSteps } }
+                              : n,
+                          ),
+                        }));
+                      }}
+                      options={[...FLOW_COLOR_OPTIONS]}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        const nextSteps = arr.filter((_, i) => i !== idx);
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, steps: nextSteps } }
+                              : n,
+                          ),
+                        }));
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-[var(--mk-status-error)]" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    const prev = Array.isArray(selectedNode.params.steps)
+                      ? (selectedNode.params.steps as Array<[number, string]>)
+                      : [];
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === selectedNode.id
+                          ? { ...n, params: { ...n.params, steps: [...prev, [0.5, "yellow"]] } }
+                          : n,
+                      ),
+                    }));
+                  }}
+                >
+                  + 添加阈值段
+                </Button>
+                <div>
+                  <label className="text-[11px] text-[var(--mk-text-secondary)]">兜底颜色 (else)</label>
+                  <SimpleSelect
+                    value={String(selectedNode.params.else ?? "pink")}
+                    onValueChange={(v) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, else: v } }
+                            : n,
+                        ),
+                      }))
+                    }
+                    options={[...FLOW_COLOR_OPTIONS]}
+                  />
+                </div>
+              </div>
+            )}
+
+            {selectedNode.kind === "compare" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">比较运算符 (op)</label>
+                <SimpleSelect
+                  value={String(selectedNode.params.op ?? "gt")}
+                  onValueChange={(v) =>
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === selectedNode.id ? { ...n, params: { ...n.params, op: v } } : n,
+                      ),
+                    }))
+                  }
+                  options={[
+                    { value: "gt", label: "大于 (a > b)" },
+                    { value: "gte", label: "大于等于 (a >= b)" },
+                    { value: "lt", label: "小于 (a < b)" },
+                    { value: "lte", label: "小于等于 (a <= b)" },
+                    { value: "eq", label: "等于 (a == b)" },
+                    { value: "neq", label: "不等于 (a != b)" },
+                  ]}
+                />
+              </div>
+            )}
+
+            {selectedNode.kind === "logic" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">逻辑运算 (op)</label>
+                <SimpleSelect
+                  value={String(selectedNode.params.op ?? "and")}
+                  onValueChange={(v) => {
+                    const targetId = selectedNode.id;
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === targetId ? { ...n, params: { ...n.params, op: v } } : n,
+                      ),
+                    }));
+                    window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                  }}
+                  options={[
+                    { value: "and", label: "与 (a && b)" },
+                    { value: "or", label: "或 (a || b)" },
+                    { value: "not", label: "非 (!a)" },
+                  ]}
+                />
+              </div>
+            )}
+
+            {selectedNode.kind === "edge" && (
+              <div className="space-y-1.5">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">检测方式 (mode)</label>
+                <SimpleSelect
+                  value={String(selectedNode.params.mode ?? "rising")}
+                  onValueChange={(v) =>
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === selectedNode.id ? { ...n, params: { ...n.params, mode: v } } : n,
+                      ),
+                    }))
+                  }
+                  options={[
+                    { value: "rising", label: "上升沿 (0 → 1)" },
+                    { value: "falling", label: "下降沿 (1 → 0)" },
+                  ]}
+                />
+              </div>
+            )}
+
+            {selectedNode.kind === "text_select" && (
+              <div className="space-y-2">
+                <div className="text-[11px] text-[var(--mk-text-secondary)]">索引文本表 (cases[i])</div>
+                {(Array.isArray(selectedNode.params.cases)
+                  ? (selectedNode.params.cases as string[])
+                  : []
+                ).map((item, idx, arr) => (
+                  <div key={idx} className="flex items-center gap-1">
+                    <span className="w-5 text-center font-mono text-[10px] text-[var(--mk-text-muted)]">
+                      {idx}
+                    </span>
+                    <Input
+                      value={String(item ?? "")}
+                      className="h-7 flex-1 font-mono text-[11px]"
+                      onChange={(e) => {
+                        const nextCases = arr.map((c, i) => (i === idx ? e.target.value : c));
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, cases: nextCases } }
+                              : n,
+                          ),
+                        }));
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        const nextCases = arr.filter((_, i) => i !== idx);
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, cases: nextCases } }
+                              : n,
+                          ),
+                        }));
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-[var(--mk-status-error)]" />
+                    </Button>
+                  </div>
+                ))}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => {
+                    const prev = Array.isArray(selectedNode.params.cases)
+                      ? (selectedNode.params.cases as string[])
+                      : [];
+                    mutateGraph((g) => ({
+                      ...g,
+                      nodes: g.nodes.map((n) =>
+                        n.id === selectedNode.id
+                          ? { ...n, params: { ...n.params, cases: [...prev, `STATE_${prev.length}`] } }
+                          : n,
+                      ),
+                    }));
+                  }}
+                >
+                  + 添加状态文本
+                </Button>
+                <div>
+                  <label className="text-[11px] text-[var(--mk-text-secondary)]">越界兜底文本 (default)</label>
+                  <Input
+                    value={String(selectedNode.params.default ?? "")}
+                    className="font-mono text-[11px]"
                     onChange={(e) =>
                       mutateGraph((g) => ({
                         ...g,
                         nodes: g.nodes.map((n) =>
                           n.id === selectedNode.id
-                            ? { ...n, params: { ...n.params, b: Number(e.target.value) } }
+                            ? { ...n, params: { ...n.params, default: e.target.value } }
                             : n,
                         ),
                       }))
@@ -1000,16 +1787,26 @@ function FlowTabInner({
               <div className="space-y-2">
                 <SimpleSelect
                   value={String(selectedNode.params.type ?? "float")}
-                  onValueChange={(v) =>
+                  onValueChange={(v) => {
+                    const targetId = selectedNode.id;
+                    const defaultVal =
+                      v === "bool"
+                        ? false
+                        : v === "color"
+                          ? "green"
+                          : v === "text"
+                            ? "TEXT"
+                            : 0;
                     mutateGraph((g) => ({
                       ...g,
                       nodes: g.nodes.map((n) =>
-                        n.id === selectedNode.id
-                          ? { ...n, params: { ...n.params, type: v } }
+                        n.id === targetId
+                          ? { ...n, params: { ...n.params, type: v, value: defaultVal } }
                           : n,
                       ),
-                    }))
-                  }
+                    }));
+                    window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                  }}
                   options={[
                     { value: "float", label: "float" },
                     { value: "int32", label: "int32" },
@@ -1018,58 +1815,132 @@ function FlowTabInner({
                     { value: "text", label: "text" },
                   ]}
                 />
-                <Input
-                  value={String(selectedNode.params.value ?? "")}
-                  onChange={(e) => {
-                    const t = String(selectedNode.params.type ?? "float");
-                    const raw = e.target.value;
-                    const parsed =
-                      t === "float" || t === "int32"
-                        ? Number(raw) || 0
-                        : t === "bool"
-                          ? raw === "true" || raw === "1"
-                          : raw;
-                    mutateGraph((g) => ({
-                      ...g,
-                      nodes: g.nodes.map((n) =>
-                        n.id === selectedNode.id
-                          ? { ...n, params: { ...n.params, value: parsed } }
-                          : n,
-                      ),
-                    }));
-                  }}
-                />
+                {selectedNode.params.type === "bool" ? (
+                  <label className="flex items-center justify-between rounded border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-surface)] px-2.5 py-1.5 text-xs">
+                    <span>布尔值</span>
+                    <Switch
+                      checked={Boolean(selectedNode.params.value)}
+                      onCheckedChange={(checked) =>
+                        mutateGraph((g) => ({
+                          ...g,
+                          nodes: g.nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, params: { ...n.params, value: checked } }
+                              : n,
+                          ),
+                        }))
+                      }
+                    />
+                  </label>
+                ) : selectedNode.params.type === "color" ? (
+                  <SimpleSelect
+                    value={String(selectedNode.params.value ?? "green")}
+                    onValueChange={(v) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, value: v } }
+                            : n,
+                        ),
+                      }))
+                    }
+                    options={[...FLOW_COLOR_OPTIONS]}
+                  />
+                ) : selectedNode.params.type === "text" ? (
+                  <Input
+                    value={String(selectedNode.params.value ?? "")}
+                    onChange={(e) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, value: e.target.value } }
+                            : n,
+                        ),
+                      }))
+                    }
+                  />
+                ) : (
+                  <NumericParamInput
+                    integer={selectedNode.params.type === "int32"}
+                    value={Number(selectedNode.params.value ?? 0)}
+                    onCommit={(val) =>
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === selectedNode.id
+                            ? { ...n, params: { ...n.params, value: val } }
+                            : n,
+                        ),
+                      }))
+                    }
+                  />
+                )}
               </div>
             )}
 
-            <div>
-              <label className="text-[11px] text-[var(--mk-text-secondary)]">
-                节点参数 JSON（高级编辑）
-              </label>
-              <pre className="mt-1 max-h-48 overflow-auto rounded border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-code)] p-2 font-mono text-[10px] text-[var(--mk-text-secondary)]">
-                {JSON.stringify(selectedNode.params, null, 2)}
-              </pre>
+            {(selectedNode.kind === "round_int" || selectedNode.kind === "mux") && (
+              <div className="rounded border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-surface)] px-2.5 py-2 text-[11px] text-[var(--mk-text-muted)]">
+                {selectedNode.kind === "round_int"
+                  ? "无额外参数：将输入 float 四舍五入转换为 int32。"
+                  : "无额外参数：按 cond ? a : b 自动推导并输出兼容类型。"}
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] text-[var(--mk-text-secondary)]">
+                  节点参数 JSON（高级编辑）
+                </label>
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  onClick={() => {
+                    try {
+                      const parsed = JSON.parse(jsonDraft);
+                      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+                        toast.error("节点参数必须是 JSON 对象");
+                        return;
+                      }
+                      const targetId = selectedNode.id;
+                      mutateGraph((g) => ({
+                        ...g,
+                        nodes: g.nodes.map((n) =>
+                          n.id === targetId
+                            ? { ...n, params: parsed as Record<string, unknown> }
+                            : n,
+                        ),
+                      }));
+                      window.requestAnimationFrame(() => updateNodeInternals(targetId));
+                      toast.success("已应用节点 JSON 参数");
+                    } catch (err) {
+                      toast.error("JSON 语法无效", {
+                        description: err instanceof Error ? err.message : String(err),
+                      });
+                    }
+                  }}
+                >
+                  应用 JSON
+                </Button>
+              </div>
+              <textarea
+                value={jsonDraft}
+                onChange={(e) => setJsonDraft(e.target.value)}
+                rows={6}
+                spellCheck={false}
+                className="w-full rounded border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-code)] p-2 font-mono text-[10px] text-[var(--mk-text-primary)] focus:border-[var(--mk-border-focus)] focus:outline-none"
+              />
             </div>
 
             <Button
               variant="danger"
               size="sm"
               className="w-full"
-              onClick={() => {
-                mutateGraph((g) => ({
-                  ...g,
-                  nodes: g.nodes.filter((n) => n.id !== selectedNode.id),
-                  edges: g.edges.filter(
-                    (edge) =>
-                      edge.from.split(".")[0] !== selectedNode.id &&
-                      edge.to.split(".")[0] !== selectedNode.id,
-                  ),
-                }));
-                setSelectedNodeId(null);
-              }}
+              onClick={() => void deleteSelectedNodeOrEdges()}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              删除当前节点
+              删除当前节点 (Del)
             </Button>
           </div>
         )}

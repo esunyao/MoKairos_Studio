@@ -20,6 +20,7 @@ import {
   saveMkuiAtPath,
   saveMkuiWithDialog,
 } from "./mkuiFileService";
+import { isTauriRuntime } from "./tauriBridge";
 import { guardUnsavedChanges } from "./unsavedGuard";
 
 /**
@@ -138,6 +139,11 @@ export async function saveCurrentProject(saveAs = false): Promise<boolean> {
         : await saveMkuiWithDialog(doc, doc.name, pendingHistory, codegenBundle);
 
     if (!receipt) {
+      if (!isTauriRuntime()) {
+        toast.info("浏览器预览已导出工程快照 (.mkui.json)", {
+          description: "完整 .mkui ZIP + codegen/* 归档请在 Tauri 桌面端保存",
+        });
+      }
       return false;
     }
 

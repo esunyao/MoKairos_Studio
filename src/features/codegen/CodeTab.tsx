@@ -35,9 +35,11 @@ type ActiveFileSelection =
 export function CodeTab({
   initialFile,
   initialLine,
+  jumpNonce,
 }: {
   initialFile?: string | null;
   initialLine?: number | null;
+  jumpNonce?: number;
 }) {
   const doc = useDocumentStore((s) => s.doc);
   const profile = useCodegenStore((s) => s.profile);
@@ -61,15 +63,18 @@ export function CodeTab({
   }));
   const [newFileName, setNewFileName] = useState("");
   const [draftContent, setDraftContent] = useState("");
+  const [activeJumpLine, setActiveJumpLine] = useState<number | null>(initialLine ?? null);
 
   useEffect(() => {
     if (!initialFile) return;
-    if (codeFiles[initialFile] !== undefined) {
+    if (useCodegenStore.getState().codeFiles[initialFile] !== undefined) {
       setSel({ group: "code", name: initialFile });
-    } else if (previewFiles[initialFile] !== undefined) {
+      setActiveJumpLine(initialLine ?? null);
+    } else if (useCodegenStore.getState().previewFiles[initialFile] !== undefined) {
       setSel({ group: "preview", name: initialFile });
+      setActiveJumpLine(initialLine ?? null);
     }
-  }, [initialFile, codeFiles, previewFiles]);
+  }, [initialFile, initialLine, jumpNonce]);
 
   // 更新 Monaco 智能补全上下文
   useEffect(() => {
@@ -107,7 +112,7 @@ export function CodeTab({
     sel.group === "preview" || (sel.group === "lib" && !isLibOverridden);
 
   const editorLang: "c" | "cpp" | "ini" = useMemo(() => {
-    if (sel.name.endsWith(".cpp") || sel.name.endsWith(".hpp")) return "cpp";
+    if (sel.name.includes(".cpp") || sel.name.includes(".hpp")) return "cpp";
     if (sel.name.endsWith(".toml")) return "ini";
     return "c";
   }, [sel.name]);
@@ -160,7 +165,10 @@ export function CodeTab({
                       ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
                       : "hover:bg-[var(--mk-bg-surface)] text-[var(--mk-text-secondary)]",
                   )}
-                  onClick={() => setSel({ group: "code", name })}
+                  onClick={() => {
+                    setActiveJumpLine(null);
+                    setSel({ group: "code", name });
+                  }}
                 >
                   <span className="truncate font-mono text-[11px]">{name}</span>
                   <div className="flex items-center gap-1">
@@ -170,7 +178,12 @@ export function CodeTab({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          const nextTarget = codeNames.find((n) => n !== name) ?? "nodes.c";
                           deleteCodeFile(name);
+                          if (active) {
+                            setActiveJumpLine(null);
+                            setSel({ group: "code", name: nextTarget });
+                          }
                         }}
                         className="text-[var(--mk-status-error)] hover:opacity-80 cursor-pointer"
                         title="删除文件"
@@ -203,26 +216,35 @@ export function CodeTab({
             lib/（基底模板覆写）
           </div>
           <div className="space-y-1">
-            {libNames.map((name) => {
-              const active = sel.group === "lib" && sel.name === name;
-              const overridden = libOverrides[name] !== undefined;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setSel({ group: "lib", name })}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-[var(--mk-radius-sm)] px-2 py-1 text-left cursor-pointer",
-                    active
-                      ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
-                      : "hover:bg-[var(--mk-bg-surface)] text-[var(--mk-text-secondary)]",
-                  )}
-                >
-                  <span className="truncate font-mono text-[11px]">{name}</span>
-                  {overridden && <Badge tone="warn">已覆写</Badge>}
-                </button>
-              );
-            })}
+            {libNames.length === 0 ? (
+              <div className="px-2 py-1 text-[11px] text-[var(--mk-text-muted)]">
+                浏览器预览模式无法读取内置模板，请在桌面端查看并覆写 `*.j2` 基底。
+              </div>
+            ) : (
+              libNames.map((name) => {
+                const active = sel.group === "lib" && sel.name === name;
+                const overridden = libOverrides[name] !== undefined;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setActiveJumpLine(null);
+                      setSel({ group: "lib", name });
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-[var(--mk-radius-sm)] px-2 py-1 text-left cursor-pointer",
+                      active
+                        ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
+                        : "hover:bg-[var(--mk-bg-surface)] text-[var(--mk-text-secondary)]",
+                    )}
+                  >
+                    <span className="truncate font-mono text-[11px]">{name}</span>
+                    {overridden && <Badge tone="warn">已覆写</Badge>}
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -233,24 +255,33 @@ export function CodeTab({
             生成预览（只读）
           </div>
           <div className="space-y-1">
-            {previewNames.map((name) => {
-              const active = sel.group === "preview" && sel.name === name;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setSel({ group: "preview", name })}
-                  className={cn(
-                    "flex w-full items-center justify-between rounded-[var(--mk-radius-sm)] px-2 py-1 text-left cursor-pointer",
-                    active
-                      ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
-                      : "hover:bg-[var(--mk-bg-surface)] text-[var(--mk-text-secondary)]",
-                  )}
-                >
-                  <span className="truncate font-mono text-[11px]">{name}</span>
-                </button>
-              );
-            })}
+            {previewNames.length === 0 ? (
+              <div className="px-2 py-1 text-[11px] text-[var(--mk-text-muted)]">
+                暂无预览文件（需 Tauri 桌面端且无阻断错误）。
+              </div>
+            ) : (
+              previewNames.map((name) => {
+                const active = sel.group === "preview" && sel.name === name;
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      setActiveJumpLine(null);
+                      setSel({ group: "preview", name });
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-[var(--mk-radius-sm)] px-2 py-1 text-left cursor-pointer",
+                      active
+                        ? "bg-[var(--mk-accent-primary-tint)] text-[var(--mk-accent-primary)]"
+                        : "hover:bg-[var(--mk-bg-surface)] text-[var(--mk-text-secondary)]",
+                    )}
+                  >
+                    <span className="truncate font-mono text-[11px]">{name}</span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
       </aside>
@@ -306,7 +337,7 @@ export function CodeTab({
             value={draftContent}
             language={editorLang}
             readOnly={isReadOnly}
-            jumpLine={initialLine}
+            jumpLine={activeJumpLine}
             onChange={setDraftContent}
             onSave={(val) => void handleSave(val)}
           />

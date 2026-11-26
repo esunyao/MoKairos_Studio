@@ -1,4 +1,10 @@
 import { invokeCommand, isTauriRuntime } from "./tauriBridge";
+import {
+  BUILTIN_PRESETS_FALLBACK,
+  parseCFileFallback,
+  upsertCodeNodeFallback,
+  validateProfileLightweight,
+} from "@/domain/codegen/profileSerializer";
 import type { MkuiDocument } from "@/domain/protocol/types";
 import type {
   CodegenBundle,
@@ -19,7 +25,7 @@ import type {
 
 export async function loadCodegenPresets(): Promise<CodegenPresetInfo[]> {
   if (!isTauriRuntime()) {
-    return [];
+    return BUILTIN_PRESETS_FALLBACK;
   }
   return invokeCommand<CodegenPresetInfo[]>("codegen_load_presets");
 }
@@ -44,7 +50,10 @@ export async function validateCodegenProfile(
   codeFiles: Record<string, string>,
 ): Promise<CodegenDiagnostic[]> {
   if (!isTauriRuntime()) {
-    return [];
+    void profileToml;
+    void document;
+    void codeFiles;
+    return validateProfileLightweight(BUILTIN_PRESETS_FALLBACK[0].profile);
   }
   return invokeCommand<CodegenDiagnostic[]>("codegen_validate_profile", {
     profileToml,
@@ -74,7 +83,7 @@ export async function parseCodegenFile(
   prefix: string,
 ): Promise<ParsedCodeFile> {
   if (!isTauriRuntime()) {
-    return { path, blocks: [], functions: [], diagnostics: [] };
+    return parseCFileFallback(path, content, prefix);
   }
   return invokeCommand<ParsedCodeFile>("codegen_parse_codefile", {
     path,
@@ -90,7 +99,7 @@ export async function upsertCodeNodeFunction(
   spec: CodeNodeUpsertSpec,
 ): Promise<CodeNodeUpsertResult> {
   if (!isTauriRuntime()) {
-    throw new Error("浏览器预览模式不支持代码节点 AST 同步，请在 Tauri 桌面端运行。");
+    return upsertCodeNodeFallback(path, content, prefix, spec);
   }
   return invokeCommand<CodeNodeUpsertResult>("codegen_upsert_code_node", {
     path,

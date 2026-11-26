@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { validateProfileLightweight } from "@/domain/codegen/profileSerializer";
 import { preflightDocument } from "@/domain/protocol/preflight";
 import { previewCodegenProject, validateCodegenProfile } from "@/services/codegenService";
 import { isTauriRuntime } from "@/services/tauriBridge";
@@ -27,7 +28,8 @@ export function useCodegenPreview() {
         : `${doc.name || "design"}.mkui`;
 
       if (!isTauriRuntime()) {
-        // 浏览器非桌面环境降级：仅跑前端协议预检
+        // 浏览器非桌面环境降级：联合前端协议预检与配置轻量校验
+        const profile = useCodegenStore.getState().profile;
         const pre = preflightDocument(doc).map((issue) => ({
           severity: issue.severity,
           code: issue.code,
@@ -37,8 +39,9 @@ export function useCodegenPreview() {
           frameId: issue.frameId,
           graphicId: issue.graphicId,
         }));
+        const profDiags = validateProfileLightweight(profile);
         if (!cancelled) {
-          setPreviewResult(useCodegenStore.getState().profile.prefix, {}, pre);
+          setPreviewResult(profile.prefix, {}, [...pre, ...profDiags]);
         }
         return;
       }

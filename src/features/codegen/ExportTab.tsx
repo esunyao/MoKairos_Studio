@@ -196,7 +196,7 @@ export function ExportTab({
                   {copiedSnippet ? "已复制" : "复制"}
                 </Button>
               </div>
-              <pre className="rounded-[var(--mk-radius-md)] border border-[var(--mk-border-subtle)] bg-black/30 p-2 text-[10px] font-mono text-[var(--mk-text-secondary)] overflow-x-auto whitespace-pre-wrap">
+              <pre className="rounded-[var(--mk-radius-md)] border border-[var(--mk-border-subtle)] bg-[var(--mk-bg-code)] p-2 text-[10px] font-mono text-[var(--mk-text-primary)] overflow-x-auto whitespace-pre-wrap">
                 {lastCmakeSnippet}
               </pre>
             </div>
@@ -242,10 +242,10 @@ export function ExportTab({
             旧版格式兼容导出
           </div>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" className="flex-1 justify-center" onClick={() => void exportCurrentAsRmui()}>
+            <Button variant="secondary" size="sm" className="flex-1 justify-center" onClick={() => void exportCurrentAsRmui()}>
               导出 .rmui
             </Button>
-            <Button variant="ghost" size="sm" className="flex-1 justify-center" onClick={() => void exportCurrentAsJson()}>
+            <Button variant="secondary" size="sm" className="flex-1 justify-center" onClick={() => void exportCurrentAsJson()}>
               导出 .json
             </Button>
           </div>
@@ -343,7 +343,7 @@ export function ExportTab({
               ))
             )}
           </div>
-          <pre className="flex-1 min-h-0 overflow-auto p-3 text-[11px] leading-relaxed font-mono text-[var(--mk-text-secondary)] bg-black/25">
+          <pre className="flex-1 min-h-0 overflow-auto p-3 text-[11px] leading-relaxed font-mono text-[var(--mk-text-primary)] bg-[var(--mk-bg-code)]">
             {activePreviewContent || "// 选择左侧生成文件即可预览（仅桌面端与 CLI 生成完整 C/C++ 代码）"}
           </pre>
         </section>

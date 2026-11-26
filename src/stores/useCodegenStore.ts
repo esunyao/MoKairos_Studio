@@ -61,7 +61,9 @@ interface CodegenState {
   applyPreset: (preset: CodegenPresetInfo) => void;
   updateProfile: (updater: (prev: CodegenProfile) => CodegenProfile) => void;
   updateFlowGraph: (flowId: string, graph: FlowGraph) => void;
+  mutateFlowGraph: (flowId: string, updater: (prev: FlowGraph) => FlowGraph) => void;
   ensureFlowExists: (flowId: string) => void;
+  deleteFlowGraph: (flowId: string) => void;
   updateCodeFile: (path: string, content: string, syncAst?: boolean) => Promise<void>;
   deleteCodeFile: (path: string) => void;
   upsertCodeNode: (path: string, spec: CodeNodeUpsertSpec) => Promise<CodeFunctionInfo | null>;
@@ -196,11 +198,17 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
 
   ensureFlowExists: (flowId) => {
     set((s) => {
-      if (s.profile.flows[flowId]) return s;
+      if (s.profile.flows[flowId]) {
+        return { activeFlowId: flowId };
+      }
+      const ensuredFlows =
+        Object.keys(s.profile.flows).length === 0
+          ? { main: { nodes: [], edges: [] } }
+          : s.profile.flows;
       const next: CodegenProfile = {
         ...s.profile,
         flows: {
-          ...s.profile.flows,
+          ...ensuredFlows,
           [flowId]: { nodes: [], edges: [] },
         },
       };
@@ -213,6 +221,25 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
     });
   },
 
+  deleteFlowGraph: (flowId) => {
+    set((s) => {
+      const entries = Object.entries(s.profile.flows);
+      if (entries.length <= 1) return s;
+      const nextFlows: Record<string, FlowGraph> = {};
+      for (const [k, v] of entries) {
+        if (k !== flowId) nextFlows[k] = v;
+      }
+      const nextIds = Object.keys(nextFlows);
+      const next: CodegenProfile = { ...s.profile, flows: nextFlows };
+      return {
+        profile: next,
+        profileToml: serializeProfileToToml(next),
+        activeFlowId: s.activeFlowId === flowId ? (nextIds[0] ?? "main") : s.activeFlowId,
+        isDirty: true,
+      };
+    });
+  },
+
   updateFlowGraph: (flowId, graph) => {
     set((s) => {
       const next: CodegenProfile = {
@@ -220,6 +247,25 @@ export const useCodegenStore = create<CodegenState>((set, get) => ({
         flows: {
           ...s.profile.flows,
           [flowId]: graph,
+        },
+      };
+      return {
+        profile: next,
+        profileToml: serializeProfileToToml(next),
+        isDirty: true,
+      };
+    });
+  },
+
+  mutateFlowGraph: (flowId, updater) => {
+    set((s) => {
+      const prevGraph = s.profile.flows[flowId] ?? { nodes: [], edges: [] };
+      const nextGraph = updater(prevGraph);
+      const next: CodegenProfile = {
+        ...s.profile,
+        flows: {
+          ...s.profile.flows,
+          [flowId]: nextGraph,
         },
       };
       return {
