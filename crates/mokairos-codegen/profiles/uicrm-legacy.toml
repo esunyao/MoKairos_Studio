@@ -24,4 +24,4 @@ online = { expr = "::g_referee->IsOnline()", lang = "cpp" }
 now_ms = { expr = "::bsp::GetHighresTickMilliSec()", lang = "cpp", include = "bsp_os.h", optional = true }
 port_ready = { expr = "", lang = "cpp", optional = true }
 lock = { expr = "taskENTER_CRITICAL()", lang = "c", include = "FreeRTOS.h", optional = true }
-unlock = { expr = "taskEXIT_CRITICAL()", lang = "c", optional = true }
+unlock = { expr = "taskEXIT_CRITICAL()", lang = "c", include = "task.h", optional = true }

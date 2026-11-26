@@ -575,6 +575,7 @@ fn uicrm_new_and_legacy_presets_compile_zero_warning_with_cpp_shims() {
         let mock_inc = dir.path().join("mock_inc");
         fs::create_dir_all(mock_inc.join("seasons/2027")).unwrap();
         fs::write(mock_inc.join("FreeRTOS.h"), "void taskENTER_CRITICAL(void);\nvoid taskEXIT_CRITICAL(void);\n").unwrap();
+        fs::write(mock_inc.join("task.h"), "#include \"FreeRTOS.h\"\n").unwrap();
         fs::write(mock_inc.join("bsp_os.h"), "#include <stdint.h>\nnamespace bsp { uint32_t GetHighresTickMilliSec(); }\n").unwrap();
         fs::write(mock_inc.join("mock_battery.hpp"), "struct MockBat { float GetPercentage() { return 0.75f; } }; extern MockBat* g_battery;\n").unwrap();
         fs::write(mock_inc.join("referee.h"), "#include <stddef.h>\n#include <stdint.h>\nstruct MockRef { size_t Transmit(uint16_t cmd, const void* p, size_t len); bool IsOnline(); }; extern MockRef* g_referee;\n").unwrap();
@@ -624,6 +625,7 @@ namespace bsp { uint32_t GetHighresTickMilliSec() { return 200; } }
         let mock_inc = dir.path().join("mock_inc");
         fs::create_dir_all(mock_inc.join("boards/drivers/include")).unwrap();
         fs::write(mock_inc.join("FreeRTOS.h"), "void taskENTER_CRITICAL(void);\nvoid taskEXIT_CRITICAL(void);\n").unwrap();
+        fs::write(mock_inc.join("task.h"), "#include \"FreeRTOS.h\"\n").unwrap();
         fs::write(mock_inc.join("bsp_os.h"), "#include <stdint.h>\nnamespace bsp { uint32_t GetHighresTickMilliSec(); }\n").unwrap();
         fs::write(mock_inc.join("crc_check.h"), "#include <stdint.h>\nvoid append_crc8_check_sum(uint8_t* buf, uint32_t len);\nvoid append_crc16_check_sum(uint8_t* buf, uint32_t len);\n").unwrap();
         fs::write(mock_inc.join("bsp_uart.h"), "#include <stdint.h>\nstruct MockUart { int32_t Write(const uint8_t* buf, uint32_t len); }; extern MockUart* g_referee_uart;\n").unwrap();
