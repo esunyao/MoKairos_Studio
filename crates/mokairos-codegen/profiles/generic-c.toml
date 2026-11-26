@@ -1,0 +1,17 @@
+schema = 1
+preset = "generic-c"
+base = "official"
+mode = "api"
+prefix = "mk_hud"
+cpp_wrapper = false
+text_encoding = "utf8"
+frames = []
+custom_hooks = false
+
+[transport]
+kind = "payload"
+max_frame = 128
+
+[runtime]
+min_interval_ms = 34
+clear_layers_on_start = false

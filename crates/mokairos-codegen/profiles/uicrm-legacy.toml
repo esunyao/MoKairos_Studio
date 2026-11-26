@@ -1,0 +1,27 @@
+schema = 1
+preset = "uicrm-legacy"
+base = "official"
+mode = "mapping"
+prefix = "mk_hud"
+cpp_wrapper = false
+text_encoding = "utf8"
+frames = []
+custom_hooks = false
+
+[transport]
+kind = "frame"
+write = { expr = "::g_referee_uart->Write({buf}, {len})", lang = "cpp", include = "bsp_uart.h" }
+crc8 = { expr = "append_crc8_check_sum({buf}, {len})", lang = "c", include = "crc_check.h" }
+crc16 = { expr = "append_crc16_check_sum({buf}, {len})", lang = "c", include = "crc_check.h" }
+seq = "own"
+max_frame = 128
+
+[runtime]
+min_interval_ms = 34
+clear_layers_on_start = false
+robot_id = { expr = "::g_referee->game_robot_status.robot_id", lang = "cpp", include = "boards/drivers/include/protocol.h" }
+online = { expr = "::g_referee->IsOnline()", lang = "cpp" }
+now_ms = { expr = "::bsp::GetHighresTickMilliSec()", lang = "cpp", include = "bsp_os.h", optional = true }
+port_ready = { expr = "", lang = "cpp", optional = true }
+lock = { expr = "taskENTER_CRITICAL()", lang = "c", include = "FreeRTOS.h", optional = true }
+unlock = { expr = "taskEXIT_CRITICAL()", lang = "c", optional = true }

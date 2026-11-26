@@ -1,0 +1,25 @@
+schema = 1
+preset = "uicrm-new"
+base = "official"
+mode = "mapping"
+prefix = "mk_hud"
+cpp_wrapper = false
+text_encoding = "utf8"
+frames = []
+custom_hooks = false
+
+[transport]
+kind = "payload"
+send = { expr = "::g_referee->Transmit({cmd_id}, {data}, {len})", lang = "cpp", include = "referee.h" }
+send_ok = "{ret} == ({len} + 9)"
+max_frame = 128
+
+[runtime]
+min_interval_ms = 34
+clear_layers_on_start = false
+robot_id = { expr = "::g_referee_protocol->robot_status.robot_id", lang = "cpp", include = "seasons/2027/protocol.h" }
+online = { expr = "::g_referee->IsOnline()", lang = "cpp" }
+now_ms = { expr = "::bsp::GetHighresTickMilliSec()", lang = "cpp", include = "bsp_os.h", optional = true }
+port_ready = { expr = "", lang = "cpp", optional = true }
+lock = { expr = "taskENTER_CRITICAL()", lang = "c", include = "FreeRTOS.h", optional = true }
+unlock = { expr = "taskEXIT_CRITICAL()", lang = "c", optional = true }

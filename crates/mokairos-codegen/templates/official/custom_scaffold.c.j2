@@ -1,0 +1,19 @@
+/* MoKairos Studio 用户自定义逻辑骨架（仅在文件不存在时生成一次，工具此后永不覆盖）
+ * 可在您的机器人任务或以下钩子中调用 include/{{ prefix }}.h 暴露的接口。 */
+
+#include "{{ prefix }}.h"
+
+/* 当 profile.toml 设置 custom_hooks = true 时，以下三个钩子函数会被运行时调用： */
+void {{ prefix }}_custom_on_session_start(void) {
+    /* 会话上线后（即将开始 Add 图元前）触发 */
+}
+
+void {{ prefix }}_custom_on_frame_ready({{ prefix }}_frame_t frame) {
+    (void)frame;
+    /* 当前画面所有图元 Add 完成后触发 */
+}
+
+void {{ prefix }}_custom_on_tick(uint32_t now_ms) {
+    (void)now_ms;
+    /* 处于 ACTIVE 状态且到达发包检查节拍时触发；可在此更新自定义状态 */
+}
