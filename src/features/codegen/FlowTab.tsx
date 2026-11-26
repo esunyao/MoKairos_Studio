@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Background,
   Controls,
@@ -6,7 +6,9 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  ReactFlowProvider,
   addEdge,
+  useUpdateNodeInternals,
   type Connection,
   type Edge,
   type Node,
@@ -30,6 +32,12 @@ import { Badge, Input } from "@/components/ui/Primitives";
 import { cn } from "@/components/ui/cn";
 import { toast } from "@/components/ui/toast";
 import {
+  applyFlowEdgeChangeset,
+  applyFlowNodeChangeset,
+  flowNodeRuntimeKey,
+  type NodeRuntimeMeta,
+} from "@/domain/codegen/flowCanvasState";
+import {
   getNodePorts,
   PORT_TYPE_COLORS,
   TRANSFORM_NODE_TEMPLATES,
@@ -44,6 +52,7 @@ import {
   type FlowValueType,
 } from "@/domain/codegen/types";
 import { useCodefileSync } from "@/hooks/useCodefileSync";
+import { useAppStore } from "@/stores/useAppStore";
 import { useCodegenStore } from "@/stores/useCodegenStore";
 import { useDocumentStore } from "@/stores/useDocumentStore";
 import { MonacoCodeEditor } from "./MonacoCodeEditor";
@@ -101,7 +110,7 @@ function MokairosFlowNodeCard({ data, selected }: NodeProps<Node<FlowNodeRenderD
                   width: 9,
                   height: 9,
                   background: PORT_TYPE_COLORS[port.type],
-                  border: "1.5px solid #0d1117",
+                  border: "1.5px solid var(--mk-bg-panel)",
                 }}
               />
               <span className="text-[10px] text-[var(--mk-text-secondary)]">
@@ -125,7 +134,7 @@ function MokairosFlowNodeCard({ data, selected }: NodeProps<Node<FlowNodeRenderD
                   width: 9,
                   height: 9,
                   background: PORT_TYPE_COLORS[port.type],
-                  border: "1.5px solid #0d1117",
+                  border: "1.5px solid var(--mk-bg-panel)",
                 }}
               />
             </div>
@@ -165,11 +174,13 @@ function nodeDisplayMeta(node: FlowNode): { title: string; subtitle: string } {
   }
 }
 
-export function FlowTab({
+function FlowTabInner({
   onOpenCodeFile,
 }: {
   onOpenCodeFile?: (file: string, line?: number) => void;
-} = {}) {
+}) {
+  const theme = useAppStore((s) => s.theme);
+  const updateNodeInternals = useUpdateNodeInternals();
   const doc = useDocumentStore((s) => s.doc);
   const profile = useCodegenStore((s) => s.profile);
   const activeFlowId = useCodegenStore((s) => s.activeFlowId);
@@ -182,6 +193,8 @@ export function FlowTab({
   const { syncCodeNodeToFile } = useCodefileSync();
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(() => new Set());
+  const [runtimeMeta, setRuntimeMeta] = useState<Record<string, NodeRuntimeMeta>>({});
   const [newFlowName, setNewFlowName] = useState("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
@@ -203,6 +216,11 @@ export function FlowTab({
     nodes: [],
     edges: [],
   };
+
+  useEffect(() => {
+    setSelectedNodeId(null);
+    setSelectedEdgeIds(new Set());
+  }, [effectiveFlowId]);
 
   const targetOptions = useMemo(() => collectGraphicTargetOptions(doc), [doc]);
 
@@ -239,12 +257,23 @@ export function FlowTab({
       currentGraph.nodes.map((fn, idx) => {
         const ports = getNodePorts(fn, portOpts);
         const meta = nodeDisplayMeta(fn);
-        const pos = fn.position ?? currentGraph.layout?.[fn.id] ?? [80 + (idx % 4) * 260, 80 + Math.floor(idx / 4) * 150];
+        const rt = runtimeMeta[flowNodeRuntimeKey(effectiveFlowId, fn.id)];
+        const pos =
+          fn.position ??
+          currentGraph.layout?.[fn.id] ?? [
+            80 + (idx % 4) * 260,
+            80 + Math.floor(idx / 4) * 150,
+          ];
         return {
           id: fn.id,
           type: "mokairos",
-          position: { x: pos[0], y: pos[1] },
+          position: rt?.dragPosition ?? { x: pos[0], y: pos[1] },
           selected: fn.id === selectedNodeId,
+          ...(rt?.measured ? { measured: rt.measured } : {}),
+          ...(rt?.width !== undefined ? { width: rt.width } : {}),
+          ...(rt?.height !== undefined ? { height: rt.height } : {}),
+          ...(rt?.dragging ? { dragging: true } : {}),
+          ...(rt?.resizing ? { resizing: true } : {}),
           data: {
             flowNode: fn,
             title: meta.title,
@@ -255,7 +284,7 @@ export function FlowTab({
           },
         };
       }),
-    [currentGraph, portOpts, selectedNodeId, errorNodeIds],
+    [currentGraph, portOpts, runtimeMeta, effectiveFlowId, selectedNodeId, errorNodeIds],
   );
 
   const rfEdges: Edge[] = useMemo(
@@ -263,17 +292,19 @@ export function FlowTab({
       currentGraph.edges.map((e, idx) => {
         const [srcN, srcP = "out"] = e.from.split(".");
         const [dstN, dstP = "in"] = e.to.split(".");
+        const id = e.id || `e_${idx}_${srcN}_${srcP}_${dstN}_${dstP}`;
         return {
-          id: e.id || `e_${idx}_${srcN}_${srcP}_${dstN}_${dstP}`,
+          id,
           source: srcN,
           sourceHandle: srcP,
           target: dstN,
           targetHandle: dstP,
+          selected: selectedEdgeIds.has(id),
           animated: false,
           style: { strokeWidth: 2, stroke: "var(--mk-accent-primary)" },
         };
       }),
-    [currentGraph.edges],
+    [currentGraph.edges, selectedEdgeIds],
   );
 
   const mutateGraph = useCallback(
@@ -286,39 +317,66 @@ export function FlowTab({
 
   const onNodesChange: OnNodesChange<Node<FlowNodeRenderData>> = useCallback(
     (changes) => {
-      const nextRf = changes.applyTo(rfNodes);
-      const posMap = new Map<string, [number, number]>(
-        nextRf.map((n) => [n.id, [Math.round(n.position.x), Math.round(n.position.y)]]),
-      );
-      const aliveIds = new Set(nextRf.map((n) => n.id));
+      const res = applyFlowNodeChangeset({
+        flowId: effectiveFlowId,
+        changes,
+        rfNodes,
+        currentRuntime: runtimeMeta,
+        currentSelectedId: selectedNodeId,
+      });
+      if (res.runtimeChanged) {
+        setRuntimeMeta(res.nextRuntime);
+      }
+      if (res.selectionChanged) {
+        setSelectedNodeId(res.nextSelectedId);
+      }
+      if (!res.shouldMutateGraph) return;
+
+      const removedSet = new Set(res.removedIds);
       mutateGraph((g) => ({
         ...g,
         nodes: g.nodes
-          .filter((n) => aliveIds.has(n.id))
-          .map((n) => ({ ...n, position: posMap.get(n.id) ?? n.position })),
-        edges: g.edges.filter((e) => {
-          const [s] = e.from.split(".");
-          const [t] = e.to.split(".");
-          return aliveIds.has(s) && aliveIds.has(t);
-        }),
+          .filter((n) => !removedSet.has(n.id))
+          .map((n) =>
+            res.committedPositions[n.id] !== undefined
+              ? { ...n, position: res.committedPositions[n.id] }
+              : n,
+          ),
+        edges:
+          removedSet.size > 0
+            ? g.edges.filter((e) => {
+                const [s] = e.from.split(".");
+                const [t] = e.to.split(".");
+                return !removedSet.has(s) && !removedSet.has(t);
+              })
+            : g.edges,
       }));
     },
-    [rfNodes, mutateGraph],
+    [effectiveFlowId, rfNodes, runtimeMeta, selectedNodeId, mutateGraph],
   );
 
   const onEdgesChange: OnEdgesChange<Edge> = useCallback(
     (changes) => {
-      const nextRf = changes.applyTo(rfEdges);
+      const res = applyFlowEdgeChangeset({
+        changes,
+        rfEdges,
+        currentSelectedEdgeIds: selectedEdgeIds,
+      });
+      if (res.selectionChanged) {
+        setSelectedEdgeIds(res.nextSelectedEdgeIds);
+      }
+      if (!res.shouldMutateGraph) return;
+
       mutateGraph((g) => ({
         ...g,
-        edges: nextRf.map((e) => ({
+        edges: res.nextRfEdges.map((e) => ({
           id: e.id,
           from: `${e.source}.${e.sourceHandle || "out"}`,
           to: `${e.target}.${e.targetHandle || "in"}`,
         })),
       }));
     },
-    [rfEdges, mutateGraph],
+    [rfEdges, selectedEdgeIds, mutateGraph],
   );
 
   const onConnect = useCallback(
@@ -411,12 +469,14 @@ export function FlowTab({
       if (!codeOriginalName) {
         addNode({ kind: "code_fn", ref: fnInfo.name, params: {} });
       } else if (selectedNode && selectedNode.kind === "code_fn") {
+        const targetId = selectedNode.id;
         mutateGraph((g) => ({
           ...g,
           nodes: g.nodes.map((n) =>
-            n.id === selectedNode.id ? { ...n, ref: fnInfo.name } : n,
+            n.id === targetId ? { ...n, ref: fnInfo.name } : n,
           ),
         }));
+        window.requestAnimationFrame(() => updateNodeInternals(targetId));
       }
     }
     setCodeModalOpen(false);
@@ -606,6 +666,7 @@ export function FlowTab({
       {/* 中央：React Flow 画布 */}
       <div className="relative flex-1 min-w-0 bg-[var(--mk-bg-canvas)]">
         <ReactFlow
+          className={theme}
           nodes={rfNodes}
           edges={rfEdges}
           nodeTypes={NODE_TYPES}
@@ -613,6 +674,10 @@ export function FlowTab({
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+          onPaneClick={() => {
+            setSelectedNodeId(null);
+            setSelectedEdgeIds(new Set());
+          }}
           onNodeContextMenu={(e, node) => {
             e.preventDefault();
             setSelectedNodeId(node.id);
@@ -673,8 +738,18 @@ export function FlowTab({
           }}
           fitView
         >
-          <Background gap={18} size={1} />
-          <MiniMap zoomable pannable />
+          <Background gap={18} size={1.4} color="var(--mk-dot-grid)" />
+          <MiniMap
+            zoomable
+            pannable
+            nodeColor="var(--mk-accent-primary)"
+            maskColor={theme === "dark" ? "rgba(13, 17, 23, 0.65)" : "rgba(241, 245, 249, 0.72)"}
+            style={{
+              backgroundColor: "var(--mk-bg-panel)",
+              border: "1px solid var(--mk-border-subtle)",
+              borderRadius: 8,
+            }}
+          />
           <Controls />
         </ReactFlow>
 
@@ -859,6 +934,7 @@ export function FlowTab({
                   size="sm"
                   className="w-full"
                   onClick={() => {
+                    const targetId = selectedNode.id;
                     const args = Array.isArray(selectedNode.params.args)
                       ? [...(selectedNode.params.args as Array<{ name: string; type: FlowValueType }>)]
                       : [];
@@ -866,11 +942,12 @@ export function FlowTab({
                     mutateGraph((g) => ({
                       ...g,
                       nodes: g.nodes.map((n) =>
-                        n.id === selectedNode.id
+                        n.id === targetId
                           ? { ...n, params: { ...n.params, args } }
                           : n,
                       ),
                     }));
+                    window.requestAnimationFrame(() => updateNodeInternals(targetId));
                   }}
                 >
                   + 添加接口参数
@@ -1000,5 +1077,15 @@ export function FlowTab({
 
       <ContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
+  );
+}
+
+export function FlowTab(props: {
+  onOpenCodeFile?: (file: string, line?: number) => void;
+}) {
+  return (
+    <ReactFlowProvider>
+      <FlowTabInner {...props} />
+    </ReactFlowProvider>
   );
 }

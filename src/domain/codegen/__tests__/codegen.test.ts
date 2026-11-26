@@ -1,4 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { EdgeChangeset, NodeChangeset, type Edge, type Node } from "@xyflow/react";
+import {
+  applyFlowEdgeChangeset,
+  applyFlowNodeChangeset,
+  flowNodeRuntimeKey,
+} from "../flowCanvasState";
 import { validateFlowEdgeCandidate } from "../nodeRegistry";
 import { createDefaultProfile, serializeProfileToToml } from "../profileSerializer";
 import { collectGraphicTargetOptions, type FlowGraph } from "../types";
@@ -84,5 +90,112 @@ describe("codegen profile & graph helpers", () => {
     );
     expect(selfLoop.valid).toBe(false);
     expect(selfLoop.reason).toContain("环路");
+  });
+
+  it("preserves measured dimensions without mutating FlowGraph and commits final drag position", () => {
+    const rfNodes: Node<{ label: string }>[] = [
+      { id: "n1", position: { x: 100, y: 120 }, data: { label: "Node 1" } },
+      { id: "n2", position: { x: 320, y: 120 }, data: { label: "Node 2" } },
+    ];
+
+    const dimChanges = new NodeChangeset<Node<{ label: string }>>([
+      { id: "n1", type: "dimensions", dimensions: { width: 210, height: 84 } },
+    ]);
+    const dimRes = applyFlowNodeChangeset({
+      flowId: "main",
+      changes: dimChanges,
+      rfNodes,
+      currentRuntime: {},
+      currentSelectedId: null,
+    });
+    expect(dimRes.shouldMutateGraph).toBe(false);
+    expect(dimRes.runtimeChanged).toBe(true);
+    expect(dimRes.nextRuntime[flowNodeRuntimeKey("main", "n1")]?.measured).toEqual({
+      width: 210,
+      height: 84,
+    });
+
+    const selectChanges = new NodeChangeset<Node<{ label: string }>>([
+      { id: "n1", type: "select", selected: true },
+    ]);
+    const selRes = applyFlowNodeChangeset({
+      flowId: "main",
+      changes: selectChanges,
+      rfNodes,
+      currentRuntime: dimRes.nextRuntime,
+      currentSelectedId: null,
+    });
+    expect(selRes.shouldMutateGraph).toBe(false);
+    expect(selRes.selectionChanged).toBe(true);
+    expect(selRes.nextSelectedId).toBe("n1");
+
+    const dragChanges = new NodeChangeset<Node<{ label: string }>>([
+      { id: "n1", type: "position", dragging: true, position: { x: 145.6, y: 199.2 } },
+    ]);
+    const dragRes = applyFlowNodeChangeset({
+      flowId: "main",
+      changes: dragChanges,
+      rfNodes,
+      currentRuntime: selRes.nextRuntime,
+      currentSelectedId: selRes.nextSelectedId,
+    });
+    expect(dragRes.shouldMutateGraph).toBe(false);
+    expect(dragRes.nextRuntime[flowNodeRuntimeKey("main", "n1")]?.dragPosition).toEqual({
+      x: 145.6,
+      y: 199.2,
+    });
+
+    const dropChanges = new NodeChangeset<Node<{ label: string }>>([
+      { id: "n1", type: "position", dragging: false, position: { x: 145.6, y: 199.2 } },
+    ]);
+    const dropRes = applyFlowNodeChangeset({
+      flowId: "main",
+      changes: dropChanges,
+      rfNodes,
+      currentRuntime: dragRes.nextRuntime,
+      currentSelectedId: dragRes.nextSelectedId,
+    });
+    expect(dropRes.shouldMutateGraph).toBe(true);
+    expect(dropRes.committedPositions).toEqual({ n1: [146, 199] });
+    expect(dropRes.nextRuntime[flowNodeRuntimeKey("main", "n1")]?.dragPosition).toBeUndefined();
+
+    const removeChanges = new NodeChangeset<Node<{ label: string }>>([
+      { id: "n1", type: "remove" },
+    ]);
+    const rmRes = applyFlowNodeChangeset({
+      flowId: "main",
+      changes: removeChanges,
+      rfNodes,
+      currentRuntime: dropRes.nextRuntime,
+      currentSelectedId: "n1",
+    });
+    expect(rmRes.shouldMutateGraph).toBe(true);
+    expect(rmRes.removedIds).toEqual(["n1"]);
+    expect(rmRes.nextSelectedId).toBeNull();
+    expect(rmRes.nextRuntime[flowNodeRuntimeKey("main", "n1")]).toBeUndefined();
+  });
+
+  it("handles edge selection locally and only mutates FlowGraph on structural edge changes", () => {
+    const rfEdges: Edge[] = [{ id: "e1", source: "n1", target: "n2" }];
+
+    const selEdge = new EdgeChangeset<Edge>([{ id: "e1", type: "select", selected: true }]);
+    const selRes = applyFlowEdgeChangeset({
+      changes: selEdge,
+      rfEdges,
+      currentSelectedEdgeIds: new Set(),
+    });
+    expect(selRes.shouldMutateGraph).toBe(false);
+    expect(selRes.selectionChanged).toBe(true);
+    expect(selRes.nextSelectedEdgeIds.has("e1")).toBe(true);
+
+    const rmEdge = new EdgeChangeset<Edge>([{ id: "e1", type: "remove" }]);
+    const rmRes = applyFlowEdgeChangeset({
+      changes: rmEdge,
+      rfEdges,
+      currentSelectedEdgeIds: selRes.nextSelectedEdgeIds,
+    });
+    expect(rmRes.shouldMutateGraph).toBe(true);
+    expect(rmRes.nextRfEdges).toEqual([]);
+    expect(rmRes.nextSelectedEdgeIds.size).toBe(0);
   });
 });
